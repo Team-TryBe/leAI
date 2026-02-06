@@ -276,69 +276,24 @@ async def initiate_gmail_connect(
 async def gmail_oauth_callback(
     code: str = Query(...),
     state: str = Query(...),
-    db: AsyncSession = Depends(get_db),
 ):
     """
     Handle OAuth2 callback from Google.
     
     Documentation:
-    ✅ Step 2: Exchange authorization code for tokens
-    - Verify the state parameter (CSRF check)
-    - Exchange the code for access_token and refresh_token
-    - Store encrypted tokens in database
-    - Redirect to dashboard with success
+    ✅ Step 2: Pass authorization code back to frontend
+    - Receive code and state from Google
+    - Redirect to frontend with code (do NOT exchange here - code can only be used once!)
+    - Frontend will exchange code for tokens via /gmail/store-tokens
     """
     
     try:
-        # Exchange code for tokens
-        token_url = "https://oauth2.googleapis.com/token"
-        
-        data = {
-            "code": code,
-            "client_id": settings.GOOGLE_CLIENT_ID,
-            "client_secret": settings.GOOGLE_CLIENT_SECRET,
-            "redirect_uri": f"{settings.API_URL}/api/v1/auth/gmail/callback",
-            "grant_type": "authorization_code",
-        }
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(token_url, data=data)
-            
-            if response.status_code != 200:
-                error_detail = response.json()
-                print(f"❌ Token exchange failed: {error_detail}")
-                return RedirectResponse(
-                    url=f"{settings.FRONTEND_URL}/dashboard?gmail_error=token_exchange_failed"
-                )
-            
-            tokens = response.json()
-        
-        # Extract tokens
-        access_token = tokens.get("access_token")
-        refresh_token = tokens.get("refresh_token")
-        expires_in = tokens.get("expires_in", 3600)
-        
-        if not access_token:
-            print("❌ No access token in response")
-            return RedirectResponse(
-                url=f"{settings.FRONTEND_URL}/dashboard?gmail_error=no_access_token"
-            )
-        
-        # Get user from JWT token in session or use the refresh_token's associated user
-        # For security, we need to identify which user this is for.
-        # In a production app, you'd need additional verification.
-        # For now, we'll assume the user is identified by extracting from auth header
-        # or you could have a temporary session store mapping state -> user_id
-        
-        # ⚠️ SECURITY NOTE: In production, verify the state matches what you stored
-        # and that it's associated with a valid user session
-        
-        # For now, we return a redirect with tokens to be handled by frontend
-        # In a better implementation, store these securely server-side first
-        
-        print(f"✅ Gmail OAuth2 callback: received tokens")
+        print(f"✅ Gmail OAuth2 callback received")
+        print(f"   Code: {code[:20]}...")
+        print(f"   State: {state}")
         
         # Return redirect to dashboard with code and state (frontend will exchange for tokens)
+        # IMPORTANT: We do NOT exchange the code here because it can only be used ONCE
         return RedirectResponse(
             url=f"{settings.FRONTEND_URL}/dashboard/settings?code={code}&state={state}"
         )
@@ -346,7 +301,7 @@ async def gmail_oauth_callback(
     except Exception as e:
         print(f"❌ Error in Gmail callback: {e}")
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/dashboard?gmail_error=internal_error"
+            url=f"{settings.FRONTEND_URL}/dashboard?gmail_error=callback_error"
         )
 
 
