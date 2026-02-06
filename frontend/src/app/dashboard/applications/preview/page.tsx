@@ -41,6 +41,11 @@ if (typeof window !== "undefined") {
 // TYPES
 // ============================================================================
 
+interface SocialLink {
+  label: string;
+  url: string;
+}
+
 interface ContactInfo {
   email: string;
   phone: string;
@@ -48,6 +53,7 @@ interface ContactInfo {
   linkedin?: string;
   github?: string;
   portfolio?: string;
+  socialLinks?: SocialLink[];
 }
 
 interface Experience {
@@ -72,6 +78,7 @@ interface Certification {
   issuer: string;
   date: string;
   credential_id?: string;
+  link?: string;
 }
 
 interface Project {
@@ -161,7 +168,9 @@ const generateCVPDF = (cvDraft: CVDraft) => {
         <div style="margin-top: 10px; font-size: 12px; color: #666;">
           ${cvDraft.contact_info.email} • ${cvDraft.contact_info.phone} • ${cvDraft.contact_info.location}
           ${cvDraft.contact_info.linkedin ? `• <a href="${cvDraft.contact_info.linkedin}" style="color: #0077b5; text-decoration: none;">LinkedIn</a>` : ""}
+          ${cvDraft.contact_info.github ? `• <a href="${cvDraft.contact_info.github}" style="color: #333; text-decoration: none;">GitHub</a>` : ""}
           ${cvDraft.contact_info.portfolio ? `• <a href="${cvDraft.contact_info.portfolio}" style="color: #007bff; text-decoration: none;">Portfolio</a>` : ""}
+          ${cvDraft.contact_info.socialLinks?.map(link => link.label && link.url ? `• <a href="${link.url}" style="color: #007bff; text-decoration: none;">${link.label}</a>` : '').join(' ') || ''}
         </div>
       </div>
 
@@ -218,6 +227,7 @@ const generateCVPDF = (cvDraft: CVDraft) => {
                 <div>
                   <p style="font-weight: bold; margin: 0; font-size: 11px;">${cert.name}</p>
                   <p style="color: #666; margin: 2px 0; font-size: 10px;">${cert.issuer}</p>
+                  ${cert.link ? `<a href="${cert.link}" style="color: #007bff; text-decoration: none; font-size: 10px;">View Credential</a>` : ''}
                 </div>
                 <p style="font-size: 10px; color: #666; margin: 0;">${cert.date}</p>
               </div>
@@ -1084,6 +1094,7 @@ function EditableCVPanel({
   setEditingSection: (section: string | null) => void;
 }) {
   const [tempContact, setTempContact] = useState(cvDraft.contact_info);
+  const [tempSocialLinks, setTempSocialLinks] = useState<SocialLink[]>(cvDraft.contact_info.socialLinks || []);
   const [tempSummary, setTempSummary] = useState(cvDraft.professional_summary);
   const [tempExperience, setTempExperience] = useState(cvDraft.experience);
   const [tempEducation, setTempEducation] = useState(cvDraft.education);
@@ -1093,7 +1104,7 @@ function EditableCVPanel({
   const [tempReferees, setTempReferees] = useState(cvDraft.referees);
 
   const handleSaveContact = () => {
-    onUpdate({ ...cvDraft, contact_info: tempContact });
+    onUpdate({ ...cvDraft, contact_info: { ...tempContact, socialLinks: tempSocialLinks } });
     setEditingSection(null);
   };
 
@@ -1190,6 +1201,51 @@ function EditableCVPanel({
               placeholder="Portfolio URL"
               className="w-full px-4 py-2 bg-brand-dark border border-brand-dark-border rounded-lg text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-accent"
             />
+            
+            {/* Additional Social Links */}
+            <div className="mt-6 pt-6 border-t border-brand-dark-border space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-brand-text">Additional Social Links</h4>
+                <button
+                  onClick={() => setTempSocialLinks([...tempSocialLinks, { label: '', url: '' }])}
+                  className="px-3 py-1.5 bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary rounded-lg text-xs font-medium transition-colors border border-brand-primary/50"
+                >
+                  + Add Link
+                </button>
+              </div>
+              {tempSocialLinks.map((link, idx) => (
+                <div key={idx} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={link.label}
+                    onChange={(e) => {
+                      const updated = [...tempSocialLinks];
+                      updated[idx].label = e.target.value;
+                      setTempSocialLinks(updated);
+                    }}
+                    placeholder="Label (e.g., Twitter, Instagram)"
+                    className="flex-1 px-4 py-2 bg-brand-dark border border-brand-dark-border rounded-lg text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-accent text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={link.url}
+                    onChange={(e) => {
+                      const updated = [...tempSocialLinks];
+                      updated[idx].url = e.target.value;
+                      setTempSocialLinks(updated);
+                    }}
+                    placeholder="URL"
+                    className="flex-1 px-4 py-2 bg-brand-dark border border-brand-dark-border rounded-lg text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-accent text-sm"
+                  />
+                  <button
+                    onClick={() => setTempSocialLinks(tempSocialLinks.filter((_, i) => i !== idx))}
+                    className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition-colors border border-red-500/50"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="space-y-2">
@@ -1242,6 +1298,19 @@ function EditableCVPanel({
                     🌐 Portfolio
                   </a>
                 )}
+                {cvDraft.contact_info.socialLinks?.map((link, idx) => (
+                  link.label && link.url && (
+                    <a
+                      key={idx}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-brand-accent hover:underline"
+                    >
+                      🔗 {link.label}
+                    </a>
+                  )
+                ))}
               </div>
             )}
           </div>
@@ -1510,18 +1579,39 @@ function EditableCVPanel({
                     placeholder="Date"
                     className="w-full px-4 py-2 bg-brand-dark border border-brand-dark-border rounded-lg text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-accent"
                   />
+                  <input
+                    type="text"
+                    value={cert.link || ''}
+                    onChange={(e) => {
+                      const updated = [...tempCertifications];
+                      updated[idx].link = e.target.value;
+                      setTempCertifications(updated);
+                    }}
+                    placeholder="Verification/Credential Link (optional)"
+                    className="w-full px-4 py-2 bg-brand-dark border border-brand-dark-border rounded-lg text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-accent"
+                  />
                 </div>
               ))}
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {cvDraft.certifications.map((cert, idx) => (
-                <div key={idx} className="flex justify-between items-start">
-                  <div>
+                <div key={idx} className="flex justify-between items-start group">
+                  <div className="flex-1">
                     <h4 className="font-medium text-brand-text">{cert.name}</h4>
                     <p className="text-sm text-brand-text-muted">{cert.issuer}</p>
+                    {cert.link && (
+                      <a
+                        href={cert.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-brand-accent hover:underline flex items-center gap-1 mt-1"
+                      >
+                        🔗 View Credential
+                      </a>
+                    )}
                   </div>
-                  <span className="text-xs text-brand-text-muted">{cert.date}</span>
+                  <span className="text-xs text-brand-text-muted whitespace-nowrap">{cert.date}</span>
                 </div>
               ))}
             </div>
@@ -1798,7 +1888,7 @@ function PDFPreviewPanel({ cvDraft }: { cvDraft: CVDraft }) {
           </div>
           
           {/* Social Links Row */}
-          {(cvDraft.contact_info.linkedin || cvDraft.contact_info.github || cvDraft.contact_info.portfolio) && (
+          {(cvDraft.contact_info.linkedin || cvDraft.contact_info.github || cvDraft.contact_info.portfolio || (cvDraft.contact_info.socialLinks && cvDraft.contact_info.socialLinks.length > 0)) && (
             <div className="flex justify-center flex-wrap gap-4 text-xs mt-2">
               {cvDraft.contact_info.linkedin && (
                 <a href={cvDraft.contact_info.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
@@ -1815,6 +1905,13 @@ function PDFPreviewPanel({ cvDraft }: { cvDraft: CVDraft }) {
                   🌐 Portfolio
                 </a>
               )}
+              {cvDraft.contact_info.socialLinks?.map((link, idx) => (
+                link.label && link.url && (
+                  <a key={idx} href={link.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    🔗 {link.label}
+                  </a>
+                )
+              ))}
             </div>
           )}
         </div>
@@ -1869,6 +1966,34 @@ function PDFPreviewPanel({ cvDraft }: { cvDraft: CVDraft }) {
             </div>
           ))}
         </div>
+
+        {/* Certifications */}
+        {cvDraft.certifications && cvDraft.certifications.length > 0 && (
+          <div className="mb-4">
+            <h2 className="text-lg font-bold text-gray-900 border-b border-gray-300 pb-1 mb-2">
+              CERTIFICATIONS
+            </h2>
+            {cvDraft.certifications.map((cert, idx) => (
+              <div key={idx} className="mb-2 flex justify-between items-start">
+                <div>
+                  <h3 className="font-bold text-gray-900">{cert.name}</h3>
+                  <p className="text-sm text-gray-700">{cert.issuer}</p>
+                  {cert.link && (
+                    <a
+                      href={cert.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1 mt-1"
+                    >
+                      🔗 View Credential
+                    </a>
+                  )}
+                </div>
+                <span className="text-sm text-gray-600 whitespace-nowrap">{cert.date}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Projects */}
         {cvDraft.projects && cvDraft.projects.length > 0 && (
