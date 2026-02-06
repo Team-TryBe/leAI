@@ -43,20 +43,30 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({
     const code = urlParams.get('code');
     const state = urlParams.get('state');
     
+    console.log('🔍 OAuth callback check:', { code: code ? 'present' : 'missing', state: state ? 'present' : 'missing' });
+    
     if (code && state) {
+      console.log('✅ Auth code and state found, storing tokens...');
       storeGmailTokens(code, state);
     }
   }, []);
 
   const storeGmailTokens = async (code: string, state: string) => {
     try {
+      console.log('📤 Storing Gmail tokens, sending code and state to backend...');
       const token = getAuthToken();
-      if (!token) return;
+      if (!token) {
+        console.error('❌ No auth token found');
+        return;
+      }
 
       const apiUrl =
         process.env.NEXT_PUBLIC_API_URL ||
         process.env.NEXT_PUBLIC_BACKEND_URL ||
         "http://localhost:8000";
+
+      console.log('🌐 API URL:', apiUrl);
+      console.log('📝 Request body:', { code: code.substring(0, 20) + '...', state });
 
       const response = await fetch(`${apiUrl}/api/v1/auth/gmail/store-tokens`, {
         method: "POST",
@@ -67,9 +77,13 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({
         body: JSON.stringify({ code, state }),
       });
 
+      console.log('📊 Response status:', response.status);
+      const data = await response.json();
+      console.log('📦 Response data:', data);
+
       if (response.ok) {
-        const data = await response.json();
         if (data.success) {
+          console.log('✅ Gmail tokens stored successfully!');
           setIsConnected(true);
           setConnectedEmail(data.data?.email || "");
           // Clear URL parameters
@@ -78,11 +92,12 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({
           onConnectionChange?.(true);
         }
       } else {
-        const errorData = await response.json();
-        setError(errorData.detail || "Failed to store Gmail tokens");
+        const errorMsg = data.detail || "Failed to store Gmail tokens";
+        console.error('❌ Failed to store tokens:', errorMsg);
+        setError(errorMsg);
       }
     } catch (err) {
-      console.error("Error storing Gmail tokens:", err);
+      console.error("❌ Error storing Gmail tokens:", err);
       setError(err instanceof Error ? err.message : "Failed to connect Gmail");
     }
   };
