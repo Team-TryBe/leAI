@@ -285,10 +285,7 @@ def generate_cover_letter_pdf(cover_letter_data: dict, full_name: str) -> bytes:
     # Date
     elements.append(Paragraph(datetime.now().strftime("%B %d, %Y"), date_style))
     
-    # Salutation
-    elements.append(Paragraph("Dear Hiring Manager,", salutation_style))
-    
-    # Cover Letter Content
+    # Cover Letter Content - content already includes salutation, body, and closing
     content = cover_letter_data.get('content', '')
     if content:
         # Split content into paragraphs
@@ -296,12 +293,6 @@ def generate_cover_letter_pdf(cover_letter_data: dict, full_name: str) -> bytes:
         for para in paragraphs:
             if para.strip():
                 elements.append(Paragraph(para.strip(), body_style))
-    
-    # Closing
-    elements.append(Spacer(1, 0.2*inch))
-    elements.append(Paragraph("Yours sincerely,", closing_style))
-    elements.append(Spacer(1, 0.35*inch))
-    elements.append(Paragraph(full_name, signature_style))
     
     # Build PDF
     doc.build(elements)

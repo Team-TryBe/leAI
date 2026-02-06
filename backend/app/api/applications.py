@@ -691,27 +691,32 @@ async def send_application_via_gmail(
         subject = f"Application for {job_data.job_title} at {job_data.company_name}"
         
         # Build email body with optional custom message
-        email_body_html = f"""
-        <html>
-            <body>
+        # If custom_message contains cover letter (has "Dear" or multiple paragraphs), use it as-is
+        # Otherwise build standard email
+        if request.custom_message and request.custom_message.strip():
+            # Check if custom_message appears to be a full cover letter
+            custom_msg = request.custom_message.strip()
+            if custom_msg.lower().startswith('dear') or '\n\n' in custom_msg:
+                # It's a full cover letter, use as-is
+                email_body_html = f"<html><body>{custom_msg.replace(chr(10), '<br/>')}</body></html>"
+            else:
+                # It's just a short message, add to standard template
+                email_body_html = f"""<html><body>
                 <p>Dear Hiring Manager,</p>
-        """
-        
-        if request.custom_message:
-            email_body_html += f"<p>{request.custom_message}</p>"
-        else:
-            email_body_html += f"""
-                <p>I am writing to express my interest in the {job_data.job_title} position at {job_data.company_name}.</p>
-                <p>I have attached my CV and cover letter for your review. I am confident that my skills and experience 
-                align well with your requirements.</p>
-            """
-        
-        email_body_html += """
+                <p>{request.custom_message}</p>
+                <p>I am attaching my CV and cover letter for your review.</p>
                 <p>Thank you for considering my application. I look forward to hearing from you.</p>
-                <p>Best regards,<br/>""" + current_user.full_name + """</p>
-            </body>
-        </html>
-        """
+                <p>Best regards,<br/>{current_user.full_name}</p>
+            </body></html>"""
+        else:
+            # Standard message
+            email_body_html = f"""<html><body>
+                <p>Dear Hiring Manager,</p>
+                <p>I am writing to express my interest in the {job_data.job_title} position at {job_data.company_name}.</p>
+                <p>I have attached my CV and cover letter for your review. I am confident that my skills and experience align well with your requirements.</p>
+                <p>Thank you for considering my application. I look forward to hearing from you.</p>
+                <p>Best regards,<br/>{current_user.full_name}</p>
+            </body></html>"""
         
         # Prepare attachments
         attachments = {}
