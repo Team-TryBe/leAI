@@ -387,9 +387,22 @@ async def store_gmail_tokens(
             "grant_type": "authorization_code",
         }
         
+        print(f"🔐 Exchanging auth code for tokens")
+        print(f"   Redirect URI: {data['redirect_uri']}")
+        print(f"   Code: {req.code[:20]}...")
+        
         async with httpx.AsyncClient() as client:
             response = await client.post(token_url, data=data)
-            response.raise_for_status()
+            
+            if response.status_code != 200:
+                error_response = response.json()
+                print(f"❌ Token exchange failed with status {response.status_code}")
+                print(f"   Error: {error_response}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Google token exchange failed: {error_response.get('error_description', error_response.get('error', 'Unknown error'))}",
+                )
+            
             tokens = response.json()
         
         access_token = tokens.get("access_token")
