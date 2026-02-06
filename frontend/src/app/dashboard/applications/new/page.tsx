@@ -643,33 +643,39 @@ function GapAnalysisDisplay({ gapAnalysis }: { gapAnalysis: GapAnalysis }) {
         {/* Gaps */}
         <div className="space-y-3">
           <div className="flex items-center gap-2 mb-3">
-            <XCircle className="w-5 h-5 text-red-600" />
-            <h4 className="font-semibold text-gray-900">Skills to Add</h4>
+            <XCircle className="w-5 h-5 text-red-500" />
+            <h4 className="font-semibold text-brand-text">Skills to Add</h4>
           </div>
           {gapAnalysis.gaps.length > 0 ? (
             <ul className="space-y-2">
               {gapAnalysis.gaps.map((gap, index) => (
-                <li key={index} className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-red-600 rounded-full" />
-                  <span className="text-sm text-gray-700">{gap}</span>
+                <li key={index} className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full" />
+                  <span className="text-sm text-brand-text">{gap}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-green-600 italic">✅ No major gaps!</p>
+            <p className="text-sm text-brand-success italic flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              No major gaps!
+            </p>
           )}
         </div>
       </div>
 
       {/* Priorities */}
       {gapAnalysis.priorities.length > 0 && (
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">Top Priority Skills from Job Description:</h4>
+        <div className="mt-6 pt-6 border-t border-brand-dark-border">
+          <h4 className="text-sm font-semibold text-brand-text mb-3 flex items-center gap-2">
+            <Target className="w-4 h-4 text-brand-primary" />
+            Top Priority Skills from Job Description
+          </h4>
           <div className="flex flex-wrap gap-2">
             {gapAnalysis.priorities.map((priority, index) => (
               <span
                 key={index}
-                className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium border border-indigo-200"
+                className="px-3 py-1.5 bg-brand-primary/20 text-brand-primary rounded-lg text-sm font-medium border border-brand-primary/50 hover:bg-brand-primary/30 transition-colors"
               >
                 #{index + 1} {priority}
               </span>
@@ -698,72 +704,86 @@ function PersonalizedSectionCard({
   const [isEditing, setIsEditing] = useState(false);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div className="bg-brand-dark-card rounded-xl border border-brand-dark-border overflow-hidden hover:border-brand-primary/30 transition-all">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+      <div className="bg-gradient-to-r from-brand-primary/20 to-brand-accent/20 px-6 py-4 border-b border-brand-dark-border">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">{section.section_name}</h3>
-          <div className="flex space-x-2">
+          <h3 className="text-lg font-display font-bold text-brand-text">{section.section_name}</h3>
+          <div className="flex gap-2">
             <button
               onClick={() => setIsEditing(!isEditing)}
-              className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary rounded-lg transition-colors font-medium border border-brand-primary/50 flex items-center gap-2"
             >
-              {isEditing ? "Preview" : "Edit"}
+              {isEditing ? (
+                <>
+                  <Eye className="w-4 h-4" />
+                  Preview
+                </>
+              ) : (
+                <>
+                  <Edit2 className="w-4 h-4" />
+                  Edit
+                </>
+              )}
             </button>
             <button
               onClick={() => onRevert(sectionKey)}
-              className="px-3 py-1 text-sm text-brand-text-muted hover:text-brand-text rounded-lg transition-colors flex items-center gap-1"
+              className="px-4 py-2 text-sm bg-brand-dark-border hover:bg-brand-dark text-brand-text-muted hover:text-brand-text rounded-lg transition-colors flex items-center gap-2 font-medium"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-4 h-4" />
               Revert
             </button>
           </div>
         </div>
       </div>
 
-      <div className="p-6 space-y-4">
+      <div className="p-6 space-y-6">
         {/* Side-by-Side Comparison */}
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-2 gap-6">
           {/* Original */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Eye className="w-4 h-4 text-brand-text-muted" />
-              <h4 className="text-xs font-bold text-brand-text-muted uppercase tracking-wider">Original</h4>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-brand-dark-border rounded-md">
+                <Eye className="w-4 h-4 text-brand-text-muted" />
+              </div>
+              <h4 className="text-sm font-semibold text-brand-text-muted uppercase tracking-wide">Original Content</h4>
             </div>
-            <div className="bg-brand-dark border border-brand-dark-border rounded-lg p-4">
-              <p className="whitespace-pre-wrap text-sm text-brand-text-muted leading-relaxed">
+            <div className="bg-brand-dark/80 border border-brand-dark-border rounded-xl p-5 min-h-[200px]">
+              <p className="whitespace-pre-wrap text-base text-brand-text-muted leading-loose font-light">
                 {section.original_content}
               </p>
             </div>
           </div>
 
           {/* Personalized/Edited */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className={isEditing ? 'flex items-center gap-1' : 'flex items-center gap-1'}>
-                {isEditing ? (
-                  <>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              {isEditing ? (
+                <>
+                  <div className="p-1.5 bg-brand-primary/20 rounded-md">
                     <Edit2 className="w-4 h-4 text-brand-primary" />
-                    <h4 className="text-xs font-bold text-brand-primary uppercase tracking-wider">Editing</h4>
-                  </>
-                ) : (
-                  <>
+                  </div>
+                  <h4 className="text-sm font-semibold text-brand-primary uppercase tracking-wide">Currently Editing</h4>
+                </>
+              ) : (
+                <>
+                  <div className="p-1.5 bg-brand-success/20 rounded-md">
                     <CheckCircle className="w-4 h-4 text-brand-success" />
-                    <h4 className="text-xs font-bold text-brand-success uppercase tracking-wider">Personalized</h4>
-                  </>
-                )}
-              </span>
+                  </div>
+                  <h4 className="text-sm font-semibold text-brand-success uppercase tracking-wide">AI Personalized</h4>
+                </>
+              )}
             </div>
             {isEditing ? (
               <textarea
                 value={editedContent}
                 onChange={(e) => onUpdate(sectionKey, e.target.value)}
-                className="w-full h-40 p-4 border border-brand-primary/50 bg-brand-dark/50 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent text-sm text-brand-text placeholder-brand-text-muted resize-none"
-                placeholder="Edit your content..."
+                className="w-full min-h-[200px] p-5 border-2 border-brand-primary/50 bg-brand-dark-card rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary text-base text-brand-text placeholder-brand-text-muted resize-none leading-loose font-light transition-all"
+                placeholder="Edit your content here..."
               />
             ) : (
-              <div className="bg-gradient-to-br from-brand-primary/10 to-brand-accent/10 border border-brand-primary/30 rounded-lg p-4">
-                <p className="whitespace-pre-wrap text-sm text-brand-text leading-relaxed">
+              <div className="bg-gradient-to-br from-brand-primary/10 via-brand-accent/5 to-brand-success/10 border-2 border-brand-primary/30 rounded-xl p-5 min-h-[200px]">
+                <p className="whitespace-pre-wrap text-base text-brand-text leading-loose font-light">
                   {editedContent}
                 </p>
               </div>
@@ -773,16 +793,22 @@ function PersonalizedSectionCard({
 
         {/* Improvements */}
         {section.improvements.length > 0 && (
-          <div className="bg-gradient-to-r from-brand-success/10 to-emerald-500/10 rounded-lg p-4 border border-brand-success/30">
-            <h4 className="text-sm font-semibold text-brand-success mb-3 flex items-center gap-2">
-              <CheckCircle className="w-4 h-4" />
-              AI Improvements
+          <div className="bg-gradient-to-br from-brand-success/15 via-emerald-500/10 to-brand-success/5 rounded-xl p-5 border border-brand-success/40">
+            <h4 className="text-base font-bold text-brand-success mb-4 flex items-center gap-2">
+              <div className="p-1.5 bg-brand-success/20 rounded-md">
+                <Lightbulb className="w-4 h-4" />
+              </div>
+              AI Improvements Made
             </h4>
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {section.improvements.map((improvement, index) => (
-                <li key={index} className="flex items-start gap-2">
-                  <span className="text-brand-success mt-0.5">✓</span>
-                  <span className="text-sm text-brand-text-muted">{improvement}</span>
+                <li key={index} className="flex items-start gap-3 group">
+                  <div className="mt-1">
+                    <div className="w-6 h-6 rounded-full bg-brand-success/20 flex items-center justify-center group-hover:bg-brand-success/30 transition-colors">
+                      <span className="text-brand-success font-bold text-xs">{index + 1}</span>
+                    </div>
+                  </div>
+                  <span className="text-sm text-brand-text leading-relaxed flex-1">{improvement}</span>
                 </li>
               ))}
             </ul>
