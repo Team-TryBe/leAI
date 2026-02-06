@@ -1,0 +1,167 @@
+version: "3.9"
+
+services:
+  # ============================================================================
+  # PostgreSQL Database
+  # ============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: aditus-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: aditus
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aditus_network
+    command: 
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1GB
+
+  # ============================================================================
+  # Redis (Optional - for ARQ background tasks in production)
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: aditus-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aditus_network
+    command: redis-server --appendonly yes
+
+  # ============================================================================
+  # FastAPI Backend
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aditus-backend
+    environment:
+      # App
+      DEBUG: "False"
+      APP_NAME: "Aditus"
+      
+      # Server
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "8000"
+      
+      # Database
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/aditus"
+      SQL_ECHO: "False"
+      
+      # Gemini API
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-your_api_key_here}
+      GEMINI_MODEL: "gemini-1.5-pro"
+      GEMINI_TEMPERATURE: "0.7"
+      
+      # File storage
+      UPLOAD_DIR: "/app/uploads"
+      PDF_OUTPUT_DIR: "/app/pdfs"
+      
+      # Background tasks
+      BACKGROUND_TASK_TIMEOUT: "300"
+      MAX_RETRIES: "3"
+      
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      
+      # CORS
+      FRONTEND_URL: "http://localhost:3000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - aditus_uploads:/app/uploads
+      - aditus_pdfs:/app/pdfs
+    networks:
+      - aditus_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: >
+      sh -c "python -m alembic upgrade head 2>/dev/null || true &&
+             uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # ============================================================================
+  # Next.js Frontend (Optional)
+  # ============================================================================
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: aditus-frontend
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: "http://localhost:8000/api"
+  #     NEXT_PUBLIC_APP_NAME: "Aditus"
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+  #   volumes:
+  #     - ./frontend:/app
+  #   networks:
+  #     - aditus_network
+  #   command: npm run dev
+
+  # ============================================================================
+  # pgAdmin (Database Management UI - Optional)
+  # ============================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: aditus-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@aditus.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - aditus_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  aditus_uploads:
+    driver: local
+  aditus_pdfs:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  aditus_network:
+    driver: bridge

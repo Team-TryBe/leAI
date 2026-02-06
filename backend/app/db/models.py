@@ -1,0 +1,232 @@
+"""
+Database models for Aditus Career Workflow Agent.
+Uses SQLAlchemy with async support and PostgreSQL.
+"""
+
+from datetime import datetime
+from enum import Enum
+from typing import Optional
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Enum as SQLEnum, ForeignKey, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+
+Base = declarative_base()
+
+
+class JobApplicationStatus(str, Enum):
+    """Workflow statuses for job applications."""
+    PENDING = "pending"
+    EXTRACTING = "extracting"
+    DRAFTING = "drafting"
+    REVIEW = "review"
+    SENT = "sent"
+    WAITING_RESPONSE = "waiting_response"
+    FEEDBACK_RECEIVED = "feedback_received"
+    INTERVIEW_SCHEDULED = "interview_scheduled"
+    OFFER_NEGOTIATION = "offer_negotiation"
+    REJECTED = "rejected"
+    ARCHIVED = "archived"
+
+
+class User(Base):
+    """User model for storing master career profiles."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    full_name = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    phone = Column(String(20), nullable=True)
+    location = Column(String(255), nullable=True)  # Kenya-based
+    professional_summary = Column(Text, nullable=True)
+    is_admin = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Gmail OAuth2 Tokens (encrypted)
+    gmail_refresh_token = Column(Text, nullable=True)  # Encrypted refresh token
+    gmail_access_token = Column(Text, nullable=True)  # Encrypted access token
+    gmail_token_expires_at = Column(DateTime, nullable=True)  # Token expiry timestamp
+    gmail_connected = Column(Boolean, default=False, nullable=False)  # Flag to indicate if Gmail is connected
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    master_profile = relationship("MasterProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    job_applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
+
+
+class MasterProfile(Base):
+    """Master career profile used to tailor CVs and applications."""
+    __tablename__ = "master_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    
+    # Personal details
+    full_name = Column(String(255), nullable=True)
+    phone_country_code = Column(String(10), nullable=True)
+    phone_number = Column(String(20), nullable=True)
+    email = Column(String(255), nullable=True)
+    location = Column(String(255), nullable=True)
+    
+    # Professional profile
+    personal_statement = Column(Text, nullable=True)
+    professional_summary = Column(Text, nullable=True)
+    
+    # Education details
+    education = Column(JSON, default=list)  # List of {institution, degree, field, graduation_year}
+    education_level = Column(String(100), nullable=True)  # e.g., "Bachelor", "Master", "PhD"
+    field_of_study = Column(String(255), nullable=True)  # e.g., "Computer Science"
+    
+    # Experience & Skills
+    experience = Column(JSON, default=list)  # List of {company, title, duration, description, skills}
+    work_experience = Column(JSON, default=list)  # Structured work history
+    technical_skills = Column(JSON, default=list)  # List of technical skills
+    soft_skills = Column(JSON, default=list)  # List of soft skills
+    skills = Column(JSON, default=list)  # List of {skill, proficiency, endorsements}
+    
+    # Additional sections
+    projects = Column(JSON, default=list)  # List of {name, description, technologies, link, date}
+    certifications = Column(JSON, default=list)  # List of {name, issuer, date, credential_id}
+    referees = Column(JSON, default=list)  # List of {name, title, company, email, phone}
+    languages = Column(JSON, default=list)  # List of {language, proficiency}
+    publications = Column(JSON, default=list)  # List of publications/articles
+    volunteer_experience = Column(JSON, default=list)  # List of volunteer roles
+    
+    # Professional links
+    linkedin_url = Column(String(500), nullable=True)
+    github_url = Column(String(500), nullable=True)
+    portfolio_url = Column(String(500), nullable=True)
+    twitter_url = Column(String(500), nullable=True)
+    medium_url = Column(String(500), nullable=True)
+    
+    # Career preferences
+    preferred_job_titles = Column(JSON, default=list)
+    preferred_industries = Column(JSON, default=list)
+    preferred_company_sizes = Column(JSON, default=list)
+    preferred_locations = Column(JSON, default=list)
+    remote_preference = Column(String(50), nullable=True)  # "remote", "hybrid", "on-site"
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="master_profile")
+
+
+class ExtractedJobData(Base):
+    """Structured data extracted from job postings via LLM."""
+    __tablename__ = "extracted_job_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_url = Column(String(500), nullable=False)
+    
+    # Core job information (required)
+    company_name = Column(String(255), nullable=False)
+    job_title = Column(String(255), nullable=False)
+    location = Column(String(255), nullable=False)  # REQUIRED - critical field
+    
+    # Job details
+    job_description = Column(Text, nullable=True)
+    key_requirements = Column(JSON, default=list)  # List of requirement strings
+    preferred_skills = Column(JSON, default=list)  # List of skill strings
+    job_level = Column(String(100), nullable=True)  # e.g., Junior, Senior, Lead
+    employment_type = Column(String(100), nullable=True)  # e.g., Full-time, Contract
+    salary_range = Column(String(255), nullable=True)  # e.g., "80k - 120k KES/month"
+    
+    # CRITICAL: Deadline fields
+    application_deadline = Column(String(255), nullable=True)  # String for flexibility (YYYY-MM-DD or original text)
+    application_deadline_notes = Column(Text, nullable=True)  # Additional context: "Closes Friday 5PM", etc.
+    
+    # CRITICAL: Application contact fields
+    application_email_to = Column(String(255), nullable=True)  # Primary email to send CV
+    application_email_cc = Column(String(255), nullable=True)  # CC emails if any
+    application_method = Column(String(100), nullable=True)  # Email, Online portal, LinkedIn, WhatsApp, etc.
+    application_url = Column(String(500), nullable=True)  # Application portal link
+    
+    # Additional job info
+    responsibilities = Column(JSON, default=list)  # List of responsibilities
+    benefits = Column(JSON, default=list)  # List of benefits
+    company_description = Column(Text, nullable=True)
+    company_industry = Column(String(255), nullable=True)
+    company_size = Column(String(100), nullable=True)  # e.g., Startup, SME, Large Enterprise
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    job_applications = relationship("JobApplication", back_populates="extracted_data")
+
+
+class JobApplication(Base):
+    """Main workflow entity tracking the entire application process."""
+    __tablename__ = "job_applications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    extracted_data_id = Column(Integer, ForeignKey("extracted_job_data.id"), nullable=True)
+    
+    # Application metadata
+    job_url = Column(String(500), nullable=False)
+    status = Column(SQLEnum(JobApplicationStatus), default=JobApplicationStatus.PENDING, nullable=False, index=True)
+    
+    # Generated materials
+    tailored_cv = Column(Text, nullable=True)  # HTML content for PDF conversion
+    tailored_cv_pdf_path = Column(String(500), nullable=True)  # Path to generated PDF
+    cover_letter = Column(Text, nullable=True)  # HTML content for PDF conversion
+    cover_letter_pdf_path = Column(String(500), nullable=True)
+    cold_outreach_email = Column(Text, nullable=True)
+    cold_outreach_linkedin = Column(Text, nullable=True)
+    
+    # Application tracking
+    is_submitted = Column(Boolean, default=False)
+    submitted_at = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    # Processing info
+    error_message = Column(Text, nullable=True)
+    extraction_attempts = Column(Integer, default=0)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    extraction_completed_at = Column(DateTime, nullable=True)
+    drafting_completed_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="job_applications")
+    extracted_data = relationship("ExtractedJobData", back_populates="job_applications")
+
+
+class ApplicationReview(Base):
+    """Review feedback for generated application materials."""
+    __tablename__ = "application_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_application_id = Column(Integer, ForeignKey("job_applications.id"), nullable=False, index=True)
+    
+    cv_feedback = Column(Text, nullable=True)
+    cv_approved = Column(Boolean, default=False)
+    
+    cover_letter_feedback = Column(Text, nullable=True)
+    cover_letter_approved = Column(Boolean, default=False)
+    
+    outreach_feedback = Column(Text, nullable=True)
+    outreach_approved = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ProcessingLog(Base):
+    """Audit trail for background task processing."""
+    __tablename__ = "processing_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_application_id = Column(Integer, ForeignKey("job_applications.id"), nullable=False, index=True)
+    
+    task_type = Column(String(100), nullable=False)  # e.g., extraction, cv_generation, letter_generation
+    status = Column(String(50), nullable=False)  # started, completed, failed
+    error = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
