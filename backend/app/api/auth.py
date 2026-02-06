@@ -338,9 +338,9 @@ async def gmail_oauth_callback(
         
         print(f"✅ Gmail OAuth2 callback: received tokens")
         
-        # Return redirect to dashboard with success (frontend will handle secure storage)
+        # Return redirect to dashboard with code and state (frontend will exchange for tokens)
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/dashboard/settings?gmail_connected=true"
+            url=f"{settings.FRONTEND_URL}/dashboard/settings?code={code}&state={state}"
         )
         
     except Exception as e:
@@ -419,7 +419,11 @@ async def store_gmail_tokens(
         
         return ApiResponse(
             success=True,
-            data={"message": "Gmail connected successfully!"},
+            data={
+                "message": "Gmail connected successfully!",
+                "gmail_connected": True,
+                "email": current_user.email,
+            },
         )
         
     except Exception as e:

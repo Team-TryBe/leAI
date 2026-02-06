@@ -37,6 +37,56 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({
     checkGmailStatus();
   }, []);
 
+  // Handle OAuth callback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    
+    if (code && state) {
+      storeGmailTokens(code, state);
+    }
+  }, []);
+
+  const storeGmailTokens = async (code: string, state: string) => {
+    try {
+      const token = getAuthToken();
+      if (!token) return;
+
+      const apiUrl =
+        process.env.NEXT_PUBLIC_API_URL ||
+        process.env.NEXT_PUBLIC_BACKEND_URL ||
+        "http://localhost:8000";
+
+      const response = await fetch(`${apiUrl}/api/v1/auth/gmail/store-tokens`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code, state }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setIsConnected(true);
+          setConnectedEmail(data.data?.email || "");
+          // Clear URL parameters
+          window.history.replaceState({}, document.title, window.location.pathname);
+          // Call callback
+          onConnectionChange?.(true);
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.detail || "Failed to store Gmail tokens");
+      }
+    } catch (err) {
+      console.error("Error storing Gmail tokens:", err);
+      setError(err instanceof Error ? err.message : "Failed to connect Gmail");
+    }
+  };
+
   const checkGmailStatus = async () => {
     try {
       setCheckingStatus(true);
