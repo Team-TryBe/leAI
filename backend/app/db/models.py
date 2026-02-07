@@ -13,6 +13,80 @@ from sqlalchemy.orm import relationship
 Base = declarative_base()
 
 
+# ============================================================================
+# ROLE-BASED ACCESS CONTROL (RBAC) ENUMS
+# ============================================================================
+
+class UserRole(str, Enum):
+    """
+    Role-Based Access Control (RBAC) for Aditus Platform.
+    Designed for the Kenyan market with accountability and least privilege principles.
+    """
+    # Internal Roles (Aditus Team)
+    SUPER_ADMIN = "super_admin"  # God mode: Full system access, requires MFA
+    SUPPORT_AGENT = "support_agent"  # Read-only helper, can view-as-user for debugging
+    FINANCE_ADMIN = "finance_admin"  # Money manager: M-Pesa logs, reconciliation, reports
+    CONTENT_MANAGER = "content_manager"  # Editor: Manage jobs, blog, career tips
+    COMPLIANCE_OFFICER = "compliance_officer"  # Watchdog: Audit logs, GDPR/Data Protection Act
+    
+    # External Roles (Users & Partners)
+    CANDIDATE = "candidate"  # Standard user: Create profile, generate CVs, apply
+    RECRUITER = "recruiter"  # Pro: Post verified jobs, view applicants for their jobs
+    UNIVERSITY_VERIFIER = "university_verifier"  # Trust layer: Verify education credentials
+
+
+class PermissionScope(str, Enum):
+    """Fine-grained permission scopes for RBAC enforcement."""
+    # User Management
+    USER_VIEW = "user:view"
+    USER_EDIT = "user:edit"
+    USER_DELETE = "user:delete"
+    USER_IMPERSONATE = "user:impersonate"  # View-as-user for debugging
+    
+    # Financial Operations
+    FINANCE_VIEW = "finance:view"
+    FINANCE_RECONCILE = "finance:reconcile"
+    FINANCE_REFUND = "finance:refund"
+    FINANCE_REPORTS = "finance:reports"
+    
+    # Content Management
+    CONTENT_VIEW = "content:view"
+    CONTENT_EDIT = "content:edit"
+    CONTENT_DELETE = "content:delete"
+    CONTENT_PUBLISH = "content:publish"
+    
+    # Job Management
+    JOB_VIEW = "job:view"
+    JOB_CREATE = "job:create"
+    JOB_EDIT = "job:edit"
+    JOB_DELETE = "job:delete"
+    JOB_VERIFY = "job:verify"  # Mark jobs as verified
+    
+    # Application Management
+    APPLICATION_VIEW = "application:view"
+    APPLICATION_CREATE = "application:create"
+    APPLICATION_EDIT = "application:edit"
+    APPLICATION_DELETE = "application:delete"
+    
+    # Education Verification
+    EDUCATION_VERIFY = "education:verify"
+    EDUCATION_REVOKE = "education:revoke"
+    
+    # Compliance & Audit
+    AUDIT_VIEW = "audit:view"
+    AUDIT_EXPORT = "audit:export"
+    DATA_DELETE_COMPLIANCE = "data:delete_compliance"  # Right to be forgotten
+    
+    # System Administration
+    SYSTEM_CONFIG = "system:config"
+    SYSTEM_BAN_IP = "system:ban_ip"
+    SYSTEM_MFA_ENFORCE = "system:mfa_enforce"
+
+
+# ============================================================================
+# APPLICATION STATUS ENUMS
+# ============================================================================
+
 class JobApplicationStatus(str, Enum):
     """Workflow statuses for job applications."""
     PENDING = "pending"
@@ -48,6 +122,15 @@ class User(Base):
     phone = Column(String(20), nullable=True)
     location = Column(String(255), nullable=True)  # Kenya-based
     professional_summary = Column(Text, nullable=True)
+    
+    # Role-Based Access Control
+    role = Column(SQLEnum(UserRole), default=UserRole.CANDIDATE, nullable=False, index=True)
+    mfa_enabled = Column(Boolean, default=False, nullable=False)  # Required for SUPER_ADMIN
+    mfa_secret = Column(String(255), nullable=True)  # TOTP secret (encrypted)
+    last_login_at = Column(DateTime, nullable=True)
+    last_login_ip = Column(String(45), nullable=True)  # IPv4 or IPv6
+    
+    # Legacy admin flag (deprecated, use role instead)
     is_admin = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     paygo_credits = Column(Integer, default=0, nullable=False)  # Pay-as-you-go application credits
