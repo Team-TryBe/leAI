@@ -16,7 +16,7 @@ from google.genai import types
 
 from app.core.config import get_settings
 from app.db.database import get_db
-from app.db.models import ExtractedJobData, User, MasterProfile
+from app.db.models import ExtractedJobData, User, MasterProfile, JobApplication
 from app.schemas import ApiResponse, ExtractedJobDataResponse
 from app.api.users import get_current_user
 from app.utils.profile_validator import is_master_profile_complete
@@ -585,16 +585,71 @@ async def get_extracted_job(
 
 @router.get("/recent", response_model=ApiResponse[List[ExtractedJobDataResponse]])
 async def get_recent_extractions(
-    limit: int = 10,
+    limit: int = 20,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get recent job extractions."""
-    stmt = select(ExtractedJobData).order_by(ExtractedJobData.created_at.desc()).limit(limit)
+    """Get recent job extractions for the current user."""
+    # Get job extractions that the user has created applications from or viewed
+    # Since extracted_job_data doesn't have user_id, we get them through job_applications
+    stmt = (
+        select(ExtractedJobData)
+        .join(JobApplication, ExtractedJobData.id == JobApplication.extracted_job_id, isouter=True)
+        .where(
+            (JobApplication.user_id == current_user.id) |
+            (JobApplication.extracted_job_id == ExtractedJobData.id)
+        )
+        .order_by(ExtractedJobData.created_at.desc())
+        .distinct()
+        .limit(limit)
+    )
     result = await db.execute(stmt)
     jobs = result.scalars().all()
     
     return ApiResponse(
         success=True,
+        message=f"Retrieved {len(jobs)} recent job extractions",
+        data=[ExtractedJobDataResponse.model_validate(job) for job in jobs]
+    )
+
+
+@router.get("/search", response_model=ApiResponse[List[ExtractedJobDataResponse]])
+async def search_extractions(
+    query: Optional[str] = None,
+    company: Optional[str] = None,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Search and filter saved job extractions."""
+    stmt = (
+        select(ExtractedJobData)
+        .join(JobApplication, ExtractedJobData.id == JobApplication.extracted_job_id, isouter=True)
+        .where(JobApplication.user_id == current_user.id)
+        .order_by(ExtractedJobData.created_at.desc())
+    )
+    
+    if query:
+        query_filter = f"%{query.lower()}%"
+        from sqlalchemy import or_, func
+        stmt = stmt.where(
+            or_(
+                func.lower(ExtractedJobData.job_title).ilike(query_filter),
+                func.lower(ExtractedJobData.company_name).ilike(query_filter),
+                func.lower(ExtractedJobData.location).ilike(query_filter)
+            )
+        )
+    
+    if company:
+        from sqlalchemy import func
+        stmt = stmt.where(func.lower(ExtractedJobData.company_name).ilike(f"%{company.lower()}%"))
+    
+    stmt = stmt.limit(limit)
+    result = await db.execute(stmt)
+    jobs = result.scalars().all()
+    
+    return ApiResponse(
+        success=True,
+        message=f"Found {len(jobs)} matching job extractions",
         data=[ExtractedJobDataResponse.model_validate(job) for job in jobs]
     )

@@ -51,6 +51,10 @@ export default function JobExtractorPage() {
   const [profileMissingFields, setProfileMissingFields] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [savedJobs, setSavedJobs] = useState<ExtractedJob[]>([])
+  const [loadingSavedJobs, setLoadingSavedJobs] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeTab, setActiveTab] = useState<'extract' | 'saved'>('extract')
 
   // Form inputs
   const [url, setUrl] = useState('')
@@ -60,6 +64,7 @@ export default function JobExtractorPage() {
 
   useEffect(() => {
     checkProfileCompleteness()
+    fetchSavedJobs()
   }, [])
 
   const checkProfileCompleteness = async () => {
@@ -130,6 +135,41 @@ export default function JobExtractorPage() {
     const updatedPreviews = imagePreviews.filter((_, i) => i !== index)
     setImageFiles(updatedFiles)
     setImagePreviews(updatedPreviews)
+  }
+
+  const fetchSavedJobs = async (query?: string) => {
+    setLoadingSavedJobs(true)
+    try {
+      const token = getAuthToken()
+      if (!token) return
+
+      const fetchUrl = query
+        ? `http://127.0.0.1:8000/api/v1/job-extractor/search?query=${encodeURIComponent(query)}`
+        : 'http://127.0.0.1:8000/api/v1/job-extractor/recent'
+
+      const response = await fetch(fetchUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setSavedJobs(result.data || [])
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved jobs:', err)
+    } finally {
+      setLoadingSavedJobs(false)
+    }
+  }
+
+  const handleSearchSavedJobs = () => {
+    if (searchQuery.trim()) {
+      fetchSavedJobs(searchQuery)
+    } else {
+      fetchSavedJobs()
+    }
   }
 
   const handleExtract = async () => {
@@ -264,7 +304,44 @@ export default function JobExtractorPage() {
           </div>
         </div>
 
-        {profileComplete === false && (
+        {/* Tabs */}
+        <div className="flex gap-2 border-b border-brand-dark-border">
+          <button
+            onClick={() => setActiveTab('extract')}
+            className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+              activeTab === 'extract'
+                ? 'border-brand-primary text-brand-primary'
+                : 'border-transparent text-brand-text-muted hover:text-brand-text'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} />
+              <span>Extract New Job</span>
+            </div>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('saved')
+              if (savedJobs.length === 0) {
+                fetchSavedJobs()
+              }
+            }}
+            className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+              activeTab === 'saved'
+                ? 'border-brand-primary text-brand-primary'
+                : 'border-transparent text-brand-text-muted hover:text-brand-text'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <FileText size={16} />
+              <span>Saved Jobs ({savedJobs.length})</span>
+            </div>
+          </button>
+        </div>
+
+        {activeTab === 'extract' && (
+          <div className="space-y-6">
+            {profileComplete === false && (
           <div className="relative group">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
             <div className="relative rounded-xl bg-gradient-to-br from-yellow-500/10 via-orange-500/5 to-amber-500/10 border border-yellow-500/30 p-6">
@@ -693,6 +770,153 @@ export default function JobExtractorPage() {
             </div>
           </div>
         </div>
+      </div>
+        )}
+
+        {/* Saved Jobs Tab */}
+        {activeTab === 'saved' && (
+          <div className="space-y-6">
+            {/* Search Bar */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Search saved jobs by title, company, or location..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearchSavedJobs()}
+                className="flex-1 rounded-lg bg-brand-dark-border border border-brand-dark-border text-brand-text p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition"
+              />
+              <button
+                onClick={handleSearchSavedJobs}
+                className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm font-semibold hover:shadow-lg transition"
+              >
+                Search
+              </button>
+              <button
+                onClick={() => {
+                  setSearchQuery('')
+                  fetchSavedJobs()
+                }}
+                className="px-4 py-2.5 rounded-lg border border-brand-dark-border text-brand-text text-sm font-medium hover:bg-brand-dark-border transition"
+              >
+                Clear
+              </button>
+            </div>
+
+            {/* Loading State */}
+            {loadingSavedJobs && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="animate-spin mr-2" size={20} />
+                <span className="text-brand-text-muted">Loading saved jobs...</span>
+              </div>
+            )}
+
+            {/* Saved Jobs List */}
+            {!loadingSavedJobs && savedJobs.length > 0 && (
+              <div className="space-y-3">
+                {savedJobs.map((job) => (
+                  <div key={job.id} className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                    <div className="relative card-dark p-5 rounded-xl space-y-4">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-2 flex-1">
+                          <h3 className="font-semibold text-brand-text text-lg">{job.job_title}</h3>
+                          <p className="text-sm text-brand-text-muted flex items-center gap-2">
+                            <Building2 size={14} />
+                            {job.company_name}
+                          </p>
+                          {job.location && (
+                            <p className="text-sm text-brand-text-muted flex items-center gap-2">
+                              <MapPin size={14} />
+                              {job.location}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-xs text-brand-text-muted">
+                          {job.id ? `ID: ${job.id}` : 'Unsaved'}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {job.job_level && (
+                          <div className="text-xs">
+                            <span className="text-brand-text-muted">Level:</span>
+                            <p className="text-brand-text font-medium">{job.job_level}</p>
+                          </div>
+                        )}
+                        {job.employment_type && (
+                          <div className="text-xs">
+                            <span className="text-brand-text-muted">Type:</span>
+                            <p className="text-brand-text font-medium">{job.employment_type}</p>
+                          </div>
+                        )}
+                        {job.salary_range && (
+                          <div className="text-xs">
+                            <span className="text-brand-text-muted">Salary:</span>
+                            <p className="text-brand-text font-medium">{job.salary_range}</p>
+                          </div>
+                        )}
+                        {job.application_deadline && (
+                          <div className="text-xs">
+                            <span className="text-brand-text-muted">Deadline:</span>
+                            <p className="text-brand-text font-medium">{job.application_deadline}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {job.key_requirements && job.key_requirements.length > 0 && (
+                        <div className="pt-2 border-t border-brand-dark-border">
+                          <p className="text-xs text-brand-text-muted mb-2">Key Requirements:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {job.key_requirements.slice(0, 4).map((req, idx) => (
+                              <span key={idx} className="px-2 py-1 rounded text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                {req}
+                              </span>
+                            ))}
+                            {job.key_requirements.length > 4 && (
+                              <span className="px-2 py-1 rounded text-xs text-brand-text-muted">+{job.key_requirements.length - 4} more</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2 pt-3 border-t border-brand-dark-border">
+                        <button
+                          onClick={() => {
+                            setExtractedData(job)
+                            setActiveTab('extract')
+                          }}
+                          className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-brand-primary to-brand-accent text-white text-xs font-medium hover:shadow-lg transition flex items-center justify-center gap-1.5"
+                        >
+                          <FileText size={14} />
+                          View Details
+                        </button>
+                        <button
+                          onClick={() => router.push(`/dashboard/applications/new?job_id=${job.id}`)}
+                          className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-medium hover:shadow-lg transition flex items-center justify-center gap-1.5"
+                        >
+                          <Save size={14} />
+                          Use for Application
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!loadingSavedJobs && savedJobs.length === 0 && (
+              <div className="flex items-center justify-center py-12 rounded-lg border-2 border-dashed border-brand-dark-border">
+                <div className="text-center">
+                  <FileText size={32} className="text-brand-text-muted mx-auto mb-3 opacity-50" />
+                  <p className="text-brand-text-muted mb-1">No saved jobs yet</p>
+                  <p className="text-xs text-brand-text-muted">Extract and save jobs to see them here</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   )
