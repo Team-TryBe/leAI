@@ -233,6 +233,20 @@ Return ONLY a valid JSON object with this exact structure:
 
 def prepare_master_cv_context(profile: MasterProfile) -> Dict[str, Any]:
     """Convert MasterProfile to a structured context for the AI."""
+    
+    # Prepare social links (COMPULSORY - at least one must be present)
+    social_links = []
+    if profile.linkedin_url:
+        social_links.append(f"LinkedIn: {profile.linkedin_url}")
+    if profile.github_url:
+        social_links.append(f"GitHub: {profile.github_url}")
+    if profile.portfolio_url:
+        social_links.append(f"Portfolio: {profile.portfolio_url}")
+    if profile.twitter_url:
+        social_links.append(f"Twitter: {profile.twitter_url}")
+    if profile.medium_url:
+        social_links.append(f"Medium: {profile.medium_url}")
+    
     return {
         "full_name": profile.full_name or "Not provided",
         "email": profile.email or "Not provided",
@@ -253,6 +267,9 @@ def prepare_master_cv_context(profile: MasterProfile) -> Dict[str, Any]:
         "linkedin_url": profile.linkedin_url,
         "github_url": profile.github_url,
         "portfolio_url": profile.portfolio_url,
+        "twitter_url": profile.twitter_url,
+        "medium_url": profile.medium_url,
+        "social_links": social_links,  # Explicit list of social links for emphasis
     }
 
 

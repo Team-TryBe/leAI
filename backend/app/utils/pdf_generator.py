@@ -107,6 +107,24 @@ def generate_cv_pdf(cv_data: dict) -> bytes:
         contact_text = " • ".join(contact_parts)
         elements.append(Paragraph(contact_text, contact_style))
     
+    # Social Links - ALWAYS INCLUDE (Compulsory)
+    social_links = []
+    if contact_info.get('linkedin'):
+        social_links.append(f'<link href="{contact_info["linkedin"]}" color="blue">LinkedIn</link>')
+    if contact_info.get('github'):
+        social_links.append(f'<link href="{contact_info["github"]}" color="blue">GitHub</link>')
+    if contact_info.get('portfolio'):
+        social_links.append(f'<link href="{contact_info["portfolio"]}" color="blue">Portfolio</link>')
+    if contact_info.get('twitter'):
+        social_links.append(f'<link href="{contact_info["twitter"]}" color="blue">Twitter</link>')
+    if contact_info.get('medium'):
+        social_links.append(f'<link href="{contact_info["medium"]}" color="blue">Medium</link>')
+    
+    # Add social links if any exist
+    if social_links:
+        social_text = " • ".join(social_links)
+        elements.append(Paragraph(social_text, contact_style))
+    
     elements.append(Spacer(1, 0.15*inch))
     
     # Professional Summary

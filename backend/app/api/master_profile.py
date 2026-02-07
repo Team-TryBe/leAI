@@ -133,8 +133,25 @@ async def upsert_master_profile(
     db.add(profile)
     await db.commit()
     await db.refresh(profile)
+    
+    # Validate that at least one social link is present (COMPULSORY for CVs)
+    has_social_link = any([
+        profile.linkedin_url,
+        profile.github_url,
+        profile.portfolio_url,
+        profile.twitter_url,
+        profile.medium_url
+    ])
+    
+    warning_message = None
+    if not has_social_link:
+        warning_message = "⚠️ Warning: No social links added. At least one social link (LinkedIn, GitHub, Portfolio, etc.) is required for CV generation."
 
-    return ApiResponse(success=True, data=MasterProfileResponse.model_validate(profile))
+    return ApiResponse(
+        success=True, 
+        message=warning_message or "Profile updated successfully",
+        data=MasterProfileResponse.model_validate(profile)
+    )
 
 
 @router.post("/certifications/upload", response_model=ApiResponse[dict])
