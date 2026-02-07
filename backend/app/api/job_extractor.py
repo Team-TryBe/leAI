@@ -647,3 +647,32 @@ async def search_extractions(
         message=f"Found {len(jobs)} matching job extractions",
         data=[ExtractedJobDataResponse.model_validate(job) for job in jobs]
     )
+
+@router.get("/extracted/{job_id}", response_model=ApiResponse[ExtractedJobDataResponse])
+async def get_extracted_job(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a specific extracted job by ID (user must own the job)."""
+    stmt = (
+        select(ExtractedJobData)
+        .where(
+            (ExtractedJobData.id == job_id) &
+            (ExtractedJobData.user_id == current_user.id)
+        )
+    )
+    result = await db.execute(stmt)
+    job = result.scalar_one_or_none()
+    
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found or you don't have access to this job"
+        )
+    
+    return ApiResponse(
+        success=True,
+        message="Job details retrieved successfully",
+        data=ExtractedJobDataResponse.model_validate(job)
+    )

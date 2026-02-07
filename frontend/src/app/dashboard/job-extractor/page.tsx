@@ -882,10 +882,7 @@ export default function JobExtractorPage() {
 
                       <div className="flex gap-2 pt-3 border-t border-brand-dark-border">
                         <button
-                          onClick={() => {
-                            setExtractedData(job)
-                            setActiveTab('extract')
-                          }}
+                          onClick={() => router.push(`/dashboard/saved-jobs/${job.id}`)}
                           className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-brand-primary to-brand-accent text-white text-xs font-medium hover:shadow-lg transition flex items-center justify-center gap-1.5"
                         >
                           <FileText size={14} />
