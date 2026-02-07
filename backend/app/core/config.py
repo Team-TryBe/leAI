@@ -38,6 +38,19 @@ class Settings(BaseSettings):
     # Google OAuth2 (Gmail Integration)
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+
+    # M-Pesa Daraja API
+    DARAJA_CONSUMER_KEY: str = os.getenv("DARAJA_CONSUMER_KEY", "")
+    DARAJA_CONSUMER_SECRET: str = os.getenv("DARAJA_CONSUMER_SECRET", "")
+    DARAJA_PASSKEY: str = os.getenv("DARAJA_PASSKEY", "")
+    DARAJA_SHORTCODE: str = os.getenv("DARAJA_SHORTCODE", "")
+    DARAJA_CALLBACK_URL: str = os.getenv("DARAJA_CALLBACK_URL", "")
+    DARAJA_BASE_URL: str = os.getenv("DARAJA_BASE_URL", "https://sandbox.safaricom.co.ke")  # Use production URL in prod
+    DARAJA_TRANSACTION_TYPE: str = os.getenv("DARAJA_TRANSACTION_TYPE", "CustomerPayBillOnline")  # Use CustomerBuyGoodsOnline for Till
+
+    # Resend (Email Sending)
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    RESEND_FROM_EMAIL: str = os.getenv("RESEND_FROM_EMAIL", "")
     
     # API URLs
     API_URL: str = os.getenv("API_URL", "http://localhost:8000")

@@ -171,7 +171,7 @@ export default function Pricing() {
               </thead>
               <tbody className="divide-y divide-brand-dark-border">
                 {[
-                  { feature: 'Applications/month', freemium: '3', pro: '∞', annual: '∞' },
+                  { feature: 'Applications/month', freemium: '2', pro: '∞', annual: '∞' },
                   { feature: 'AI Matching', freemium: '✓', pro: '✓', annual: '✓' },
                   { feature: 'Advanced CV/Letters', freemium: '✗', pro: '✓', annual: '✓' },
                   { feature: 'Outreach Emails', freemium: '✗', pro: '✓', annual: '✓' },
@@ -219,7 +219,7 @@ export default function Pricing() {
               },
               {
                 q: '📆 Is there a free trial?',
-                a: 'Yes! Start free with our Freemium plan and get 3 apps per month forever.'
+                a: 'Yes! Start free with our Freemium plan and get 2 apps per month forever.'
               },
             ].map((item, i) => (
               <details key={i} className="card-dark p-4 sm:p-6 cursor-pointer group hover:border-brand-primary/50 transition-colors">

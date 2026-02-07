@@ -28,6 +28,15 @@ class JobApplicationStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+class TransactionStatus(str, Enum):
+    """M-Pesa transaction statuses."""
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    TIMEOUT = "timeout"
+
+
 class User(Base):
     """User model for storing master career profiles."""
     __tablename__ = "users"
@@ -41,12 +50,22 @@ class User(Base):
     professional_summary = Column(Text, nullable=True)
     is_admin = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    paygo_credits = Column(Integer, default=0, nullable=False)  # Pay-as-you-go application credits
     
     # Gmail OAuth2 Tokens (encrypted)
     gmail_refresh_token = Column(Text, nullable=True)  # Encrypted refresh token
     gmail_access_token = Column(Text, nullable=True)  # Encrypted access token
     gmail_token_expires_at = Column(DateTime, nullable=True)  # Token expiry timestamp
     gmail_connected = Column(Boolean, default=False, nullable=False)  # Flag to indicate if Gmail is connected
+
+    # Auth & Verification
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verification_token_hash = Column(String(255), nullable=True, unique=True)
+    email_verification_sent_at = Column(DateTime, nullable=True)
+    password_reset_token_hash = Column(String(255), nullable=True, unique=True)
+    password_reset_sent_at = Column(DateTime, nullable=True)
+    password_reset_expires_at = Column(DateTime, nullable=True)
+    google_sub = Column(String(255), nullable=True, unique=True)
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -54,6 +73,7 @@ class User(Base):
     # Relationships
     master_profile = relationship("MasterProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     job_applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
+    admin_actions = relationship("AdminActionLog", back_populates="admin_user", cascade="all, delete-orphan")
 
 
 class MasterProfile(Base):
@@ -230,3 +250,193 @@ class ProcessingLog(Base):
     error = Column(Text, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AdminActionLog(Base):
+    """Audit trail for critical admin actions."""
+    __tablename__ = "admin_action_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    action = Column(String(150), nullable=False)  # e.g., "toggle_admin", "delete_user"
+    target_type = Column(String(100), nullable=True)  # e.g., "user", "subscription"
+    target_id = Column(Integer, nullable=True)
+    details = Column(JSON, default=dict)
+
+    ip_address = Column(String(64), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Relationships
+    admin_user = relationship("User", back_populates="admin_actions")
+
+
+class PlanType(str, Enum):
+    """Subscription plan types."""
+    FREEMIUM = "freemium"
+    PAY_AS_YOU_GO = "paygo"
+    PRO_MONTHLY = "pro"
+    PRO_ANNUAL = "annual"
+
+
+class Plan(Base):
+    """Subscription plan definitions."""
+    __tablename__ = "plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_type = Column(SQLEnum(PlanType), unique=True, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    price = Column(Integer, nullable=False)  # Price in KES (cents)
+    period = Column(String(50), nullable=False)  # e.g., "monthly", "annual", "per_application"
+    description = Column(Text, nullable=True)
+    features = Column(JSON, default=list)  # List of feature strings
+    max_applications = Column(Integer, nullable=True)  # NULL = unlimited
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    subscriptions = relationship("Subscription", back_populates="plan")
+
+
+class SubscriptionStatus(str, Enum):
+    """Subscription status values."""
+    ACTIVE = "active"
+    PAUSED = "paused"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+    PAST_DUE = "past_due"
+
+
+class Subscription(Base):
+    """User subscription tracking."""
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    plan_id = Column(Integer, ForeignKey("plans.id"), nullable=False)
+    
+    status = Column(SQLEnum(SubscriptionStatus), default=SubscriptionStatus.ACTIVE, nullable=False, index=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    current_period_start = Column(DateTime, default=datetime.utcnow, nullable=False)
+    current_period_end = Column(DateTime, nullable=True)  # Next billing date
+    cancelled_at = Column(DateTime, nullable=True)
+    
+    auto_renew = Column(Boolean, default=True, nullable=False)
+    cancellation_requested = Column(Boolean, default=False, nullable=False)
+    
+    # Payment tracking
+    total_paid = Column(Integer, default=0, nullable=False)  # Total amount paid in KES (cents)
+    payment_method = Column(String(100), nullable=True)  # e.g., "m-pesa", "credit_card"
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User")
+    plan = relationship("Plan", back_populates="subscriptions")
+    payments = relationship("Payment", back_populates="subscription", cascade="all, delete-orphan")
+    invoices = relationship("Invoice", back_populates="subscription", cascade="all, delete-orphan")
+
+
+class PaymentStatus(str, Enum):
+    """Payment status values."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    PAID = "paid"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+
+
+class Payment(Base):
+    """Payment transaction tracking."""
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=False, index=True)
+    
+    amount = Column(Integer, nullable=False)  # Amount in KES (cents)
+    currency = Column(String(10), default="KES", nullable=False)
+    status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False, index=True)
+    
+    # Payment provider info
+    payment_provider = Column(String(100), nullable=True)  # e.g., "mpesa", "stripe"
+    transaction_id = Column(String(255), nullable=True, unique=True)
+    payment_method = Column(String(100), nullable=True)
+    
+    paid_at = Column(DateTime, nullable=True)
+    failed_at = Column(DateTime, nullable=True)
+    failure_reason = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    subscription = relationship("Subscription", back_populates="payments")
+    invoice = relationship("Invoice", back_populates="payment", uselist=False)
+
+
+class Invoice(Base):
+    """Invoice generation and tracking."""
+    __tablename__ = "invoices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=False, index=True)
+    payment_id = Column(Integer, ForeignKey("payments.id"), nullable=True, unique=True)
+    
+    invoice_number = Column(String(100), unique=True, nullable=False)
+    amount = Column(Integer, nullable=False)  # Amount in KES (cents)
+    
+    issued_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    due_date = Column(DateTime, nullable=True)
+    paid_at = Column(DateTime, nullable=True)
+    
+    pdf_path = Column(String(500), nullable=True)  # Path to generated PDF
+    download_token = Column(String(255), unique=True, nullable=True)  # Secure download token
+    
+    notes = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    subscription = relationship("Subscription", back_populates="invoices")
+    payment = relationship("Payment", back_populates="invoice")
+
+
+class Transaction(Base):
+    """M-Pesa payment transactions for tracking STK Push payments."""
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    
+    # M-Pesa identifiers
+    merchant_request_id = Column(String(100), nullable=True, index=True)  # From Safaricom response
+    checkout_request_id = Column(String(100), unique=True, nullable=False, index=True)  # Unique callback ID
+    mpesa_receipt_number = Column(String(100), nullable=True, unique=True, index=True)  # M-Pesa confirmation code
+    
+    # Transaction details
+    amount = Column(Integer, nullable=False)  # Amount in KES
+    phone_number = Column(String(20), nullable=False)  # Format: 254XXXXXXXXX
+    account_reference = Column(String(100), nullable=True)  # Plan type or reference
+    transaction_desc = Column(String(255), nullable=True)  # Payment description
+    
+    # Status tracking
+    status = Column(SQLEnum(TransactionStatus), default=TransactionStatus.PENDING, nullable=False, index=True)
+    result_code = Column(Integer, nullable=True)  # M-Pesa result code (0 = success)
+    result_desc = Column(Text, nullable=True)  # M-Pesa result description
+    
+    # Metadata
+    callback_payload = Column(JSON, nullable=True)  # Full callback data for debugging
+    initiated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)  # When payment was confirmed
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", backref="transactions")

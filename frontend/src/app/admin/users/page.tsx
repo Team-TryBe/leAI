@@ -15,6 +15,23 @@ interface User {
   is_active: boolean
   created_at: string
   updated_at: string
+  subscription?: {
+    plan_id: number
+    plan_type: string
+    plan_name: string
+    status: string
+    current_period_end: string | null
+    auto_renew: boolean
+  } | null
+}
+
+interface Plan {
+  id: number
+  plan_type: string
+  name: string
+  price: number
+  period: string
+  max_applications?: number | null
 }
 
 export default function AdminUsersPage() {
@@ -25,6 +42,9 @@ export default function AdminUsersPage() {
   const [filterActive, setFilterActive] = useState<boolean | null>(null)
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
+  const [plans, setPlans] = useState<Plan[]>([])
+  const [planSelections, setPlanSelections] = useState<Record<number, string>>({})
+  const [updatingPlans, setUpdatingPlans] = useState<Record<number, boolean>>({})
   const limit = 20
 
   const fetchUsers = async () => {
@@ -55,6 +75,15 @@ export default function AdminUsersPage() {
       const result = await response.json()
       setUsers(result.data.users)
       setTotal(result.data.total)
+      setPlanSelections((prev) => {
+        const next = { ...prev }
+        result.data.users.forEach((user: User) => {
+          if (!next[user.id]) {
+            next[user.id] = user.subscription?.plan_type || ''
+          }
+        })
+        return next
+      })
       setIsLoading(false)
     } catch (err) {
       console.error('Error fetching users:', err)
@@ -62,9 +91,33 @@ export default function AdminUsersPage() {
     }
   }
 
+  const fetchPlans = async () => {
+    try {
+      const token = getAuthToken()
+      if (!token) return
+
+      const response = await fetch('http://127.0.0.1:8000/api/v1/subscriptions/plans', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) throw new Error('Failed to fetch plans')
+
+      const result = await response.json()
+      setPlans(result)
+    } catch (err) {
+      console.error('Error fetching plans:', err)
+    }
+  }
+
   useEffect(() => {
     fetchUsers()
   }, [page, searchQuery, filterAdmin, filterActive])
+
+  useEffect(() => {
+    fetchPlans()
+  }, [])
 
   const toggleAdminStatus = async (userId: number, makeAdmin: boolean) => {
     try {
@@ -142,6 +195,42 @@ export default function AdminUsersPage() {
     }
   }
 
+  const updateUserPlan = async (userId: number) => {
+    try {
+      const selectedPlan = planSelections[userId]
+      if (!selectedPlan) {
+        alert('Please select a plan')
+        return
+      }
+
+      const token = getAuthToken()
+      if (!token) return
+
+      setUpdatingPlans((prev) => ({ ...prev, [userId]: true }))
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/v1/admin/users/${userId}/subscription`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ plan_type: selectedPlan }),
+        }
+      )
+
+      if (!response.ok) throw new Error('Failed to update subscription')
+
+      await fetchUsers()
+    } catch (err) {
+      console.error('Error updating subscription:', err)
+      alert('Failed to update subscription')
+    } finally {
+      setUpdatingPlans((prev) => ({ ...prev, [userId]: false }))
+    }
+  }
+
   const totalPages = Math.ceil(total / limit)
 
   return (
@@ -212,6 +301,7 @@ export default function AdminUsersPage() {
               <tr>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-brand-text">User</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-brand-text">Location</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-brand-text">Plan</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-brand-text">Status</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-brand-text">Role</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-brand-text">Joined</th>
@@ -221,13 +311,13 @@ export default function AdminUsersPage() {
             <tbody className="divide-y divide-brand-dark-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-brand-text-muted">
+                  <td colSpan={7} className="px-6 py-12 text-center text-brand-text-muted">
                     Loading users...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-brand-text-muted">
+                  <td colSpan={7} className="px-6 py-12 text-center text-brand-text-muted">
                     No users found
                   </td>
                 </tr>
@@ -244,6 +334,41 @@ export default function AdminUsersPage() {
                       <span className="text-brand-text-muted text-sm">
                         {user.location || 'Not specified'}
                       </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-sm text-brand-text">
+                            {user.subscription?.plan_name || 'No plan'}
+                          </p>
+                          <p className="text-xs text-brand-text-muted">
+                            {user.subscription?.status || 'inactive'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={planSelections[user.id] || ''}
+                            onChange={(e) =>
+                              setPlanSelections((prev) => ({ ...prev, [user.id]: e.target.value }))
+                            }
+                            className="px-2 py-1 rounded-md bg-brand-dark-border text-brand-text text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                          >
+                            <option value="">Select plan</option>
+                            {plans.map((plan) => (
+                              <option key={plan.id} value={plan.plan_type}>
+                                {plan.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => updateUserPlan(user.id)}
+                            disabled={updatingPlans[user.id]}
+                            className="px-2 py-1 rounded-md bg-brand-primary text-white text-xs disabled:opacity-50"
+                          >
+                            {updatingPlans[user.id] ? 'Updating...' : 'Update'}
+                          </button>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span

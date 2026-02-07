@@ -16,9 +16,10 @@ from google.genai import types
 
 from app.core.config import get_settings
 from app.db.database import get_db
-from app.db.models import ExtractedJobData, User
+from app.db.models import ExtractedJobData, User, MasterProfile
 from app.schemas import ApiResponse, ExtractedJobDataResponse
 from app.api.users import get_current_user
+from app.utils.profile_validator import is_master_profile_complete
 
 
 router = APIRouter(prefix="/job-extractor", tags=["job-extractor"])
@@ -391,6 +392,44 @@ async def extract_job(
     - Image/Screenshot OCR (WhatsApp forwards, Instagram posts)
     - Manual text paste (physical posters, PDFs)
     """
+    
+    # ============================================================================
+    # STEP 1: Verify Master Profile is Complete
+    # ============================================================================
+    stmt = select(MasterProfile).where(MasterProfile.user_id == current_user.id)
+    result = await db.execute(stmt)
+    profile = result.scalar_one_or_none()
+    
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "master_profile_incomplete",
+                "message": "Please complete your Master Profile before extracting job postings",
+                "missing_fields": [
+                    "Full Name", "Email", "Phone Number", "Location",
+                    "Personal Statement", "Education", "Work Experience", "Skills"
+                ],
+                "action_required": "Navigate to Master Profile page and fill in all required fields"
+            }
+        )
+    
+    is_complete, missing_fields = is_master_profile_complete(profile)
+    
+    if not is_complete:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "master_profile_incomplete",
+                "message": "Your Master Profile is incomplete. Please fill in all required fields before extracting job postings.",
+                "missing_fields": missing_fields,
+                "action_required": "Navigate to Master Profile page and complete the following fields"
+            }
+        )
+    
+    # ============================================================================
+    # STEP 2: Proceed with Job Extraction
+    # ============================================================================
     
     if not GEMINI_API_KEY:
         raise HTTPException(

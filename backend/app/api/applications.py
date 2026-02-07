@@ -367,13 +367,11 @@ async def download_application_pdf(
 ):
     """Download PDF file for an application."""
     try:
-        # Fetch the application
-        result = await db.execute(
-            select(JobApplication).where(
-                JobApplication.id == application_id,
-                JobApplication.user_id == current_user.id,
-            )
-        )
+        # Fetch the application (admins can access any record)
+        stmt = select(JobApplication).where(JobApplication.id == application_id)
+        if not current_user.is_admin:
+            stmt = stmt.where(JobApplication.user_id == current_user.id)
+        result = await db.execute(stmt)
         application = result.scalars().first()
 
         if not application:

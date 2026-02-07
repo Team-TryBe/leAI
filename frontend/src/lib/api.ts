@@ -54,15 +54,23 @@ class ApiClient {
   }
 
   async verifyEmail(token: string) {
-    return this.client.post('/auth/verify-email', { token })
+    return this.client.get('/auth/verify-email', { params: { token } })
   }
 
   async requestPasswordReset(email: string) {
     return this.client.post('/auth/forgot-password', { email })
   }
 
+    async forgotPassword(email: string) {
+      return this.client.post('/auth/forgot-password', { email })
+    }
+
   async resetPassword(token: string, new_password: string) {
     return this.client.post('/auth/reset-password', { token, new_password })
+  }
+
+  async googleAuth(id_token: string) {
+    return this.client.post('/auth/google', { id_token })
   }
 
   // User endpoints

@@ -402,444 +402,435 @@ export default function ApplicationsPage() {
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-gradient-to-br from-brand-dark via-[#1a1a3e] to-brand-dark-card">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-brand-text mb-2">
-              Applications Launchpad
-            </h1>
-            <p className="text-brand-text-muted">
-              Queue, review, and submit your tailored applications
-            </p>
+      <div className="space-y-6">
+        {/* Modern Header with Gradient */}
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-brand-primary/10 via-brand-accent/5 to-blue-500/10 border border-brand-primary/20 p-6">
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-brand-primary/20 to-brand-accent/20 flex items-center justify-center">
+              <FileText className="w-6 h-6 text-brand-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-brand-text">Applications Hub</h1>
+              <p className="text-xs text-brand-text-muted">
+                Track, manage, and submit your tailored job applications
+              </p>
+            </div>
           </div>
+        </div>
 
-          {/* Analytics Dashboard */}
-          {analytics && (
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-brand-dark-card border border-brand-dark-border rounded-xl p-4">
-                <div className="text-brand-text-muted text-sm mb-1">Total Applications</div>
-                <div className="text-3xl font-bold text-brand-text">{analytics.total_applications}</div>
+        {/* Analytics Dashboard */}
+        {analytics && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total Applications */}
+            <div className="relative group">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-brand-primary/20 to-brand-accent/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition"></div>
+              <div className="relative card-dark p-4 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-medium text-brand-text-muted">Total Applications</div>
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-primary/20 to-brand-accent/20 flex items-center justify-center">
+                    <FileText size={14} className="text-brand-primary" />
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-brand-text">{analytics.total_applications}</div>
+                <p className="text-xs text-brand-text-muted">In your queue</p>
               </div>
-              <div className="bg-brand-dark-card border border-brand-dark-border rounded-xl p-4">
-                <div className="text-brand-text-muted text-sm mb-1">Sent Applications</div>
-                <div className="text-3xl font-bold text-green-500">{analytics.sent_applications}</div>
+            </div>
+
+            {/* Sent Applications */}
+            <div className="relative group">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition"></div>
+              <div className="relative card-dark p-4 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-medium text-brand-text-muted">Sent</div>
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center">
+                    <CheckCircle size={14} className="text-green-500" />
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-green-500">{analytics.sent_applications}</div>
+                <p className="text-xs text-brand-text-muted">Successfully submitted</p>
               </div>
-              <div className="bg-brand-dark-card border border-brand-dark-border rounded-xl p-4">
-                <div className="text-brand-text-muted text-sm mb-1">Interview Rate</div>
-                <div className="text-3xl font-bold text-emerald-500">
+            </div>
+
+            {/* Interview Rate */}
+            <div className="relative group">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition"></div>
+              <div className="relative card-dark p-4 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-medium text-brand-text-muted">Interview Rate</div>
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center">
+                    <CheckCircle size={14} className="text-cyan-500" />
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-cyan-500">
                   {analytics.success_metrics.interview_rate.toFixed(1)}%
                 </div>
+                <p className="text-xs text-brand-text-muted">Of submitted applications</p>
               </div>
-              <div className="bg-brand-dark-card border border-brand-dark-border rounded-xl p-4">
-                <div className="text-brand-text-muted text-sm mb-1">Offer Rate</div>
-                <div className="text-3xl font-bold text-cyan-500">
+            </div>
+
+            {/* Offer Rate */}
+            <div className="relative group">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition"></div>
+              <div className="relative card-dark p-4 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-medium text-brand-text-muted">Offer Rate</div>
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+                    <CheckCircle size={14} className="text-purple-500" />
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-purple-500">
                   {analytics.success_metrics.offer_rate.toFixed(1)}%
                 </div>
+                <p className="text-xs text-brand-text-muted">Interview conversion</p>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Main Content - Two Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column: Applications List */}
-            <div className="lg:col-span-2">
-              <div className="bg-brand-dark-card border border-brand-dark-border rounded-2xl">
-                {/* List Header with Filters */}
-                <div className="px-6 py-4 border-b border-brand-dark-border">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-brand-text">
-                      Your Applications ({applications?.total || 0})
-                    </h2>
+        {/* Main Content - Two Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: Applications List */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Filter Header */}
+            <div className="card-dark p-4 rounded-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-brand-text flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-brand-primary/20 to-brand-accent/20 flex items-center justify-center">
+                    <FileText size={12} className="text-brand-primary" />
                   </div>
-                  
-                  {/* Status Filters */}
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setStatusFilter(null)}
-                      className={`px-4 py-2 rounded-lg text-xs font-medium transition-colors ${
-                        statusFilter === null
-                          ? "bg-brand-accent text-white"
-                          : "bg-brand-dark-border text-brand-text-muted hover:bg-brand-dark-border/80"
+                  Your Applications ({applications?.total || 0})
+                </h2>
+              </div>
+
+              {/* Status Filters */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setStatusFilter(null)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    statusFilter === null
+                      ? 'bg-gradient-to-r from-brand-primary to-brand-accent text-white shadow-lg shadow-brand-primary/30'
+                      : 'bg-brand-dark-border text-brand-text-muted hover:bg-brand-dark-border/80'
+                  }`}
+                >
+                  All
+                </button>
+                {['review', 'sent', 'archived'].map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
+                      statusFilter === status
+                        ? 'bg-gradient-to-r from-brand-primary to-brand-accent text-white shadow-lg shadow-brand-primary/30'
+                        : 'bg-brand-dark-border text-brand-text-muted hover:bg-brand-dark-border/80'
+                    }`}
+                  >
+                    {status === 'review' ? 'Queued' : status.charAt(0).toUpperCase() + status.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Applications List */}
+            {loading ? (
+              <div className="card-dark p-12 rounded-xl text-center">
+                <div className="inline-flex items-center gap-3 text-brand-text-muted">
+                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-brand-primary"></div>
+                  <span className="text-sm">Loading applications...</span>
+                </div>
+              </div>
+            ) : applications && applications.items.length > 0 ? (
+              <div className="space-y-3">
+                {applications.items.map((app) => {
+                  const config = statusConfig[app.status as keyof typeof statusConfig] || statusConfig.pending;
+                  const StatusIcon = config.icon;
+
+                  return (
+                    <div
+                      key={app.id}
+                      onClick={() => setSelectedApp(app)}
+                      className={`relative group cursor-pointer transition-all ${
+                        selectedApp?.id === app.id ? 'ring-2 ring-brand-primary' : ''
                       }`}
                     >
-                      All
-                    </button>
-                    {["review", "sent", "archived"].map((status) => (
-                      <button
-                        key={status}
-                        onClick={() => setStatusFilter(status)}
-                        className={`px-4 py-2 rounded-lg text-xs font-medium transition-colors capitalize ${
-                          statusFilter === status
-                            ? "bg-brand-accent text-white"
-                            : "bg-brand-dark-border text-brand-text-muted hover:bg-brand-dark-border/80"
-                        }`}
-                      >
-                        {status === "review" ? "Queued" : status.charAt(0).toUpperCase() + status.slice(1)}
-                      </button>
-                    ))}
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-brand-primary/20 to-brand-accent/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition"></div>
+                      <div className={`relative card-dark p-4 rounded-xl space-y-2 transition-all ${
+                        selectedApp?.id === app.id ? 'bg-brand-dark/80' : ''
+                      }`}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-brand-text truncate">{app.job_title}</h3>
+                            <p className="text-xs text-brand-text-muted">
+                              {app.company_name} • {app.location}
+                            </p>
+                          </div>
+                          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium whitespace-nowrap flex-shrink-0 ${config.color}`}>
+                            <StatusIcon size={12} />
+                            <span>{config.label}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-brand-text-muted">
+                            {new Date(app.created_at).toLocaleDateString()}
+                          </span>
+                          {app.status === 'review' || app.status === 'pending' ? (
+                            <span className="text-brand-primary font-medium">Ready to submit</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="card-dark p-12 rounded-xl text-center space-y-4">
+                <div className="flex justify-center">
+                  <div className="w-16 h-16 rounded-lg bg-brand-primary/10 flex items-center justify-center">
+                    <FileText size={32} className="text-brand-primary/40" />
                   </div>
                 </div>
-
-                {/* Applications List */}
-                {loading ? (
-                  <div className="p-6 text-center text-brand-text-muted">
-                    Loading applications...
-                  </div>
-                ) : applications && applications.items.length > 0 ? (
-                  <div className="divide-y divide-brand-dark-border">
-                    {applications.items.map((app) => {
-                      const config =
-                        statusConfig[
-                          app.status as keyof typeof statusConfig
-                        ] || statusConfig.pending;
-                      const StatusIcon = config.icon;
-
-                      return (
-                        <div
-                          key={app.id}
-                          onClick={() => setSelectedApp(app)}
-                          className={`p-4 hover:bg-brand-dark/50 cursor-pointer transition-colors ${
-                            selectedApp?.id === app.id
-                              ? "bg-brand-accent/10 border-l-4 border-brand-accent"
-                              : ""
-                          }`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-brand-text">
-                                {app.job_title}
-                              </h3>
-                              <p className="text-sm text-brand-text-muted">
-                                {app.company_name} • {app.location}
-                              </p>
-                              <p className="text-xs text-brand-text-muted mt-1">
-                                {new Date(app.created_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                            <div className={`px-3 py-1 rounded-lg border flex items-center gap-2 ${config.color}`}>
-                              <StatusIcon className="w-4 h-4" />
-                              <span className="text-xs font-medium">
-                                {config.label}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-12 text-center">
-                    <FileText className="w-16 h-16 text-brand-text-muted/30 mx-auto mb-4" />
-                    <p className="text-brand-text-muted mb-4">
-                      No applications yet
-                    </p>
-                    <button
-                      onClick={() => router.push("/dashboard/job-extractor")}
-                      className="px-6 py-2 bg-gradient-to-r from-brand-accent to-[#a78bfa] text-white rounded-lg hover:shadow-lg transition-all"
-                    >
-                      Extract First Job
-                    </button>
-                  </div>
-                )}
-
-                {/* Pagination */}
-                {applications && applications.total_pages > 1 && (
-                  <div className="px-6 py-4 border-t border-brand-dark-border flex items-center justify-between">
-                    <button
-                      onClick={() =>
-                        setCurrentPage((p) => Math.max(1, p - 1))
-                      }
-                      disabled={currentPage === 1}
-                      className="px-4 py-2 rounded-lg bg-brand-dark-border text-brand-text-muted disabled:opacity-50 hover:bg-brand-dark-border/80 transition-colors"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <span className="text-sm text-brand-text-muted">
-                      Page {currentPage} of {applications.total_pages}
-                    </span>
-                    <button
-                      onClick={() =>
-                        setCurrentPage((p) =>
-                          Math.min(applications.total_pages, p + 1)
-                        )
-                      }
-                      disabled={currentPage === applications.total_pages}
-                      className="px-4 py-2 rounded-lg bg-brand-dark-border text-brand-text-muted disabled:opacity-50 hover:bg-brand-dark-border/80 transition-colors"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
+                <div>
+                  <p className="text-brand-text-muted text-sm mb-4">No applications in your queue yet</p>
+                  <button
+                    onClick={() => router.push('/dashboard/job-extractor')}
+                    className="px-4 py-2 bg-gradient-to-r from-brand-primary to-brand-accent text-white rounded-lg text-sm font-semibold hover:shadow-lg hover:shadow-brand-primary/30 transition-all"
+                  >
+                    Start extracting jobs
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Right Column: Application Details */}
-            <div className="lg:col-span-1">
-              {selectedApp ? (
-                <div className="bg-brand-dark-card border border-brand-dark-border rounded-2xl sticky top-24">
-                  {/* Details Header */}
-                  <div className="px-6 py-4 border-b border-brand-dark-border">
-                    <h2 className="text-lg font-bold text-brand-text">
-                      Application Details
-                    </h2>
-                    <p className="text-xs text-brand-text-muted mt-1">
-                      {selectedApp.job_title} • {selectedApp.company_name}
-                    </p>
-                  </div>
+            {/* Pagination */}
+            {applications && applications.total_pages > 1 && (
+              <div className="card-dark p-4 rounded-xl flex items-center justify-between">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded-lg bg-brand-dark-border text-brand-text-muted disabled:opacity-50 hover:bg-brand-dark-border/80 transition-colors"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="text-xs text-brand-text-muted">
+                  Page {currentPage} of {applications.total_pages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(applications.total_pages, p + 1))}
+                  disabled={currentPage === applications.total_pages}
+                  className="p-2 rounded-lg bg-brand-dark-border text-brand-text-muted disabled:opacity-50 hover:bg-brand-dark-border/80 transition-colors"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </div>
 
-                  {/* Tabs */}
-                  <div className="flex gap-2 px-6 py-3 border-b border-brand-dark-border">
-                    {[
-                      { id: "cv", label: "CV", icon: FileText },
-                      { id: "cover-letter", label: "Letter", icon: MessageSquare },
-                      { id: "email", label: "Email", icon: Mail },
-                    ].map((tab) => {
-                      const TabIcon = tab.icon;
-                      return (
-                        <button
-                          key={tab.id}
-                          onClick={() =>
-                            setDetailsTab(
-                              tab.id as "cv" | "cover-letter" | "email"
-                            )
-                          }
-                          className={`flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                            detailsTab === tab.id
-                              ? "bg-brand-accent text-white"
-                              : "bg-brand-dark-border text-brand-text-muted hover:bg-brand-dark-border/80"
-                          }`}
-                        >
-                          <TabIcon className="w-3.5 h-3.5" />
-                          {tab.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+          {/* Right Column: Application Details */}
+          <div className="lg:col-span-1">
+            {selectedApp ? (
+              <div className="card-dark rounded-xl overflow-hidden sticky top-24">
+                {/* Details Header */}
+                <div className="bg-gradient-to-r from-brand-primary/10 to-brand-accent/10 border-b border-brand-primary/20 px-4 py-4">
+                  <h2 className="text-sm font-semibold text-brand-text mb-1">{selectedApp.job_title}</h2>
+                  <p className="text-xs text-brand-text-muted">{selectedApp.company_name}</p>
+                </div>
 
-                  {/* Content */}
-                  <div className="px-6 py-4 h-96 overflow-y-auto">
-                    {detailsTab === "cv" && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-semibold text-brand-text">CV</h3>
-                          {selectedApp.cv_pdf_path && pdfUrls.cv && (
-                            <a
-                              href={pdfUrls.cv}
-                              download={`cv_${selectedApp.id}.pdf`}
-                              className="flex items-center gap-2 px-3 py-1 text-xs bg-brand-accent text-white rounded-lg hover:opacity-80 transition-opacity"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              Download
-                            </a>
-                          )}
-                        </div>
-                        {selectedApp.cv_pdf_path && pdfUrls.cv ? (
-                          <embed
-                            src={pdfUrls.cv}
-                            type="application/pdf"
-                            className="w-full h-80 border border-brand-dark-border rounded-lg"
-                          />
-                        ) : (
-                          <div className="bg-brand-dark/50 p-4 rounded-lg text-xs text-brand-text-muted h-80 overflow-y-auto border border-brand-dark-border flex items-center justify-center">
-                            <p>Loading CV...</p>
-                          </div>
+                {/* Tabs */}
+                <div className="flex gap-1 px-4 py-3 border-b border-brand-dark-border">
+                  {[
+                    { id: 'cv', label: 'CV', icon: FileText },
+                    { id: 'cover-letter', label: 'Letter', icon: MessageSquare },
+                    { id: 'email', label: 'Email', icon: Mail },
+                  ].map((tab) => {
+                    const TabIcon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setDetailsTab(tab.id as 'cv' | 'cover-letter' | 'email')}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          detailsTab === tab.id
+                            ? 'bg-gradient-to-r from-brand-primary to-brand-accent text-white'
+                            : 'text-brand-text-muted hover:bg-brand-dark-border'
+                        }`}
+                      >
+                        <TabIcon size={12} />
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Content */}
+                <div className="px-4 py-4 space-y-3 max-h-96 overflow-y-auto">
+                  {detailsTab === 'cv' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-semibold text-brand-text">CV Document</h3>
+                        {selectedApp.cv_pdf_path && pdfUrls.cv && (
+                          <a
+                            href={pdfUrls.cv}
+                            download={`cv_${selectedApp.id}.pdf`}
+                            className="flex items-center gap-1.5 px-2 py-1 text-xs bg-brand-accent text-white rounded-lg hover:opacity-80 transition-opacity"
+                          >
+                            <Download size={12} />
+                            Download
+                          </a>
                         )}
                       </div>
-                    )}
-
-                    {detailsTab === "cover-letter" && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-semibold text-brand-text">
-                            Cover Letter
-                          </h3>
-                          {selectedApp.cover_letter_pdf_path && pdfUrls.coverLetter && (
-                            <a
-                              href={pdfUrls.coverLetter}
-                              download={`cover_letter_${selectedApp.id}.pdf`}
-                              className="flex items-center gap-2 px-3 py-1 text-xs bg-brand-accent text-white rounded-lg hover:opacity-80 transition-opacity"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              Download
-                            </a>
-                          )}
+                      {selectedApp.cv_pdf_path && pdfUrls.cv ? (
+                        <embed src={pdfUrls.cv} type="application/pdf" className="w-full h-64 rounded-lg border border-brand-dark-border" />
+                      ) : (
+                        <div className="h-64 bg-brand-dark-border/50 rounded-lg flex items-center justify-center text-xs text-brand-text-muted">
+                          Loading CV...
                         </div>
-                        {selectedApp.cover_letter_pdf_path && pdfUrls.coverLetter ? (
-                          <embed
-                            src={pdfUrls.coverLetter}
-                            type="application/pdf"
-                            className="w-full h-80 border border-brand-dark-border rounded-lg"
-                          />
-                        ) : (
-                          <div className="bg-brand-dark/50 p-4 rounded-lg text-xs text-brand-text-muted h-80 overflow-y-auto border border-brand-dark-border flex items-center justify-center">
-                            <p>Loading cover letter...</p>
-                          </div>
+                      )}
+                    </div>
+                  )}
+
+                  {detailsTab === 'cover-letter' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-semibold text-brand-text">Cover Letter</h3>
+                        {selectedApp.cover_letter_pdf_path && pdfUrls.coverLetter && (
+                          <a
+                            href={pdfUrls.coverLetter}
+                            download={`cover_letter_${selectedApp.id}.pdf`}
+                            className="flex items-center gap-1.5 px-2 py-1 text-xs bg-brand-accent text-white rounded-lg hover:opacity-80 transition-opacity"
+                          >
+                            <Download size={12} />
+                            Download
+                          </a>
                         )}
                       </div>
-                    )}
+                      {selectedApp.cover_letter_pdf_path && pdfUrls.coverLetter ? (
+                        <embed src={pdfUrls.coverLetter} type="application/pdf" className="w-full h-64 rounded-lg border border-brand-dark-border" />
+                      ) : (
+                        <div className="h-64 bg-brand-dark-border/50 rounded-lg flex items-center justify-center text-xs text-brand-text-muted">
+                          Loading cover letter...
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                    {detailsTab === "email" && (
-                      <div className="space-y-4">
+                  {detailsTab === 'email' && (
+                    <div className="space-y-3">
+                      <div className="bg-brand-dark-border/50 p-3 rounded-lg space-y-2">
                         <div>
-                          <p className="text-xs font-semibold text-brand-text-muted mb-1">
-                            TO:
-                          </p>
-                          <p className="text-sm text-brand-text break-all">
-                            {selectedApp.application_email_to || "Not provided"}
-                          </p>
+                          <p className="text-xs text-brand-text-muted font-medium mb-1">TO:</p>
+                          <p className="text-xs text-brand-text break-all font-mono">{selectedApp.application_email_to || '—'}</p>
                         </div>
                         {selectedApp.application_email_cc && (
                           <div>
-                            <p className="text-xs font-semibold text-brand-text-muted mb-1">
-                              CC:
-                            </p>
-                            <p className="text-sm text-brand-text break-all">
-                              {selectedApp.application_email_cc}
-                            </p>
+                            <p className="text-xs text-brand-text-muted font-medium mb-1">CC:</p>
+                            <p className="text-xs text-brand-text break-all font-mono">{selectedApp.application_email_cc}</p>
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                </div>
 
-                  {/* Actions */}
-                  <div className="px-6 py-4 border-t border-brand-dark-border space-y-3">
-                    {selectedApp.status === "pending" ||
-                    selectedApp.status === "review" ? (
-                      <>
+                {/* Actions */}
+                <div className="border-t border-brand-dark-border px-4 py-3 space-y-3">
+                  {selectedApp.status === 'pending' || selectedApp.status === 'review' ? (
+                    <>
+                      <button
+                        onClick={() => handleSubmitApplication(selectedApp.id)}
+                        className="w-full px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:shadow-lg hover:shadow-green-500/30 transition-all flex items-center justify-center gap-2 text-sm font-semibold"
+                      >
+                        <Send size={14} />
+                        {selectedApp.status === 'review' ? 'Send via Gmail' : 'Submit'}
+                      </button>
+                      <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={() =>
-                            handleSubmitApplication(selectedApp.id)
-                          }
-                          className="w-full px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2 font-medium"
+                          onClick={() => handleArchiveApplication(selectedApp.id)}
+                          className="px-3 py-1.5 bg-brand-dark-border text-brand-text-muted rounded-lg hover:bg-yellow-500/10 hover:text-yellow-400 transition-all text-xs font-medium"
                         >
-                          <Send className="w-4 h-4" />
-                          {selectedApp.status === "review"
-                            ? "Send via Gmail"
-                            : "Submit Application"}
+                          Archive
                         </button>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() =>
-                              handleArchiveApplication(selectedApp.id)
-                            }
-                            className="px-4 py-2 bg-brand-dark-border text-brand-text-muted rounded-lg hover:bg-yellow-500/10 hover:text-yellow-400 transition-all"
-                          >
-                            Archive
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleDeleteApplication(selectedApp.id)
-                            }
-                            disabled={deleting}
-                            className="px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                          >
-                            {deleting ? "Deleting..." : "Delete"}
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="space-y-3">
-                        {/* Status Update for Sent Applications */}
-                        {selectedApp.status === "sent" || 
-                         selectedApp.status === "waiting_response" ||
-                         selectedApp.status === "feedback_received" ||
-                         selectedApp.status === "interview_scheduled" ||
-                         selectedApp.status === "offer_negotiation" ||
-                         selectedApp.status === "rejected" ? (
-                          <>
-                            <div className="p-3 bg-brand-accent/10 border border-brand-accent/30 rounded-lg">
-                              <p className="text-xs text-brand-text-muted mb-2">Update Application Status:</p>
-                              <div className="grid grid-cols-2 gap-2">
-                                {selectedApp.status !== "waiting_response" && (
-                                  <button
-                                    onClick={() => handleUpdateStatus("waiting_response")}
-                                    disabled={updatingStatus}
-                                    className="px-3 py-2 text-xs bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-all disabled:opacity-50"
-                                  >
-                                    Waiting Response
-                                  </button>
-                                )}
-                                {selectedApp.status !== "feedback_received" && (
-                                  <button
-                                    onClick={() => handleUpdateStatus("feedback_received")}
-                                    disabled={updatingStatus}
-                                    className="px-3 py-2 text-xs bg-cyan-500/20 text-cyan-300 rounded-lg hover:bg-cyan-500/30 transition-all disabled:opacity-50"
-                                  >
-                                    Feedback Received
-                                  </button>
-                                )}
-                                {selectedApp.status !== "interview_scheduled" && (
-                                  <button
-                                    onClick={() => handleUpdateStatus("interview_scheduled")}
-                                    disabled={updatingStatus}
-                                    className="px-3 py-2 text-xs bg-emerald-500/20 text-emerald-300 rounded-lg hover:bg-emerald-500/30 transition-all disabled:opacity-50"
-                                  >
-                                    Interview Scheduled
-                                  </button>
-                                )}
-                                {selectedApp.status !== "offer_negotiation" && (
-                                  <button
-                                    onClick={() => handleUpdateStatus("offer_negotiation")}
-                                    disabled={updatingStatus}
-                                    className="px-3 py-2 text-xs bg-green-500/20 text-green-300 rounded-lg hover:bg-green-500/30 transition-all disabled:opacity-50"
-                                  >
-                                    Offer Negotiation
-                                  </button>
-                                )}
-                                {selectedApp.status !== "rejected" && (
-                                  <button
-                                    onClick={() => handleUpdateStatus("rejected")}
-                                    disabled={updatingStatus}
-                                    className="px-3 py-2 text-xs bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-all disabled:opacity-50"
-                                  >
-                                    Rejected
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="p-4 bg-brand-accent/10 border border-brand-accent/30 rounded-lg text-center">
-                            <p className="text-xs text-brand-text-muted">
-                              Application{" "}
-                              <span className="text-brand-accent font-semibold">
-                                {selectedApp.status.toUpperCase().replace(/_/g, " ")}
-                              </span>
-                            </p>
-                          </div>
-                        )}
-                        
-                        {/* Archive and Delete buttons */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => handleArchiveApplication(selectedApp.id)}
-                            className="px-4 py-2 bg-brand-dark-border text-brand-text-muted rounded-lg hover:bg-yellow-500/10 hover:text-yellow-400 transition-all text-sm"
-                          >
-                            Archive
-                          </button>
-                          <button
-                            onClick={() => handleDeleteApplication(selectedApp.id)}
-                            disabled={deleting}
-                            className="px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                          >
-                            {deleting ? "Deleting..." : "Delete"}
-                          </button>
+                        <button
+                          onClick={() => handleDeleteApplication(selectedApp.id)}
+                          disabled={deleting}
+                          className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-all disabled:opacity-50 text-xs font-medium"
+                        >
+                          {deleting ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    </>
+                  ) : selectedApp.status === 'sent' || 
+                     selectedApp.status === 'waiting_response' ||
+                     selectedApp.status === 'feedback_received' ||
+                     selectedApp.status === 'interview_scheduled' ||
+                     selectedApp.status === 'offer_negotiation' ||
+                     selectedApp.status === 'rejected' ? (
+                    <>
+                      <div className="bg-brand-primary/10 border border-brand-primary/30 rounded-lg p-3 space-y-2">
+                        <p className="text-xs font-medium text-brand-text">Update Status</p>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {selectedApp.status !== 'waiting_response' && (
+                            <button
+                              onClick={() => handleUpdateStatus('waiting_response')}
+                              disabled={updatingStatus}
+                              className="px-2 py-1.5 text-xs bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-all disabled:opacity-50"
+                            >
+                              Waiting
+                            </button>
+                          )}
+                          {selectedApp.status !== 'interview_scheduled' && (
+                            <button
+                              onClick={() => handleUpdateStatus('interview_scheduled')}
+                              disabled={updatingStatus}
+                              className="px-2 py-1.5 text-xs bg-emerald-500/20 text-emerald-300 rounded-lg hover:bg-emerald-500/30 transition-all disabled:opacity-50"
+                            >
+                              Interview
+                            </button>
+                          )}
+                          {selectedApp.status !== 'offer_negotiation' && (
+                            <button
+                              onClick={() => handleUpdateStatus('offer_negotiation')}
+                              disabled={updatingStatus}
+                              className="px-2 py-1.5 text-xs bg-green-500/20 text-green-300 rounded-lg hover:bg-green-500/30 transition-all disabled:opacity-50"
+                            >
+                              Offer
+                            </button>
+                          )}
+                          {selectedApp.status !== 'rejected' && (
+                            <button
+                              onClick={() => handleUpdateStatus('rejected')}
+                              disabled={updatingStatus}
+                              className="px-2 py-1.5 text-xs bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-all disabled:opacity-50"
+                            >
+                              Rejected
+                            </button>
+                          )}
                         </div>
                       </div>
-                    )}
+                      <button
+                        onClick={() => handleDeleteApplication(selectedApp.id)}
+                        disabled={deleting}
+                        className="w-full px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-all disabled:opacity-50 text-xs font-medium"
+                      >
+                        {deleting ? 'Deleting...' : 'Delete Application'}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="bg-brand-accent/10 border border-brand-accent/30 rounded-lg p-3 text-center">
+                      <p className="text-xs text-brand-text-muted">
+                        Status: <span className="text-brand-accent font-semibold">{selectedApp.status.toUpperCase().replace(/_/g, ' ')}</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="card-dark p-8 rounded-xl text-center space-y-4">
+                <div className="flex justify-center">
+                  <div className="w-12 h-12 rounded-lg bg-brand-primary/10 flex items-center justify-center">
+                    <Eye size={24} className="text-brand-primary/40" />
                   </div>
                 </div>
-              ) : (
-                <div className="bg-brand-dark-card border border-brand-dark-border rounded-2xl p-8 text-center">
-                  <AlertCircle className="w-12 h-12 text-brand-text-muted/30 mx-auto mb-3" />
-                  <p className="text-brand-text-muted">
-                    Select an application to view details
-                  </p>
-                </div>
-              )}
-            </div>
+                <p className="text-sm text-brand-text-muted">Select an application to view details</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

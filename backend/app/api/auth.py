@@ -3,6 +3,7 @@ Authentication routes for user registration, login, and token management.
 """
 
 import secrets
+import hashlib
 from datetime import timedelta, datetime
 from jose import jwt, JWTError
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
@@ -23,6 +24,7 @@ from app.schemas import (
     ApiResponse,
 )
 from app.services.encryption_service import encrypt_token
+from app.services.resend_service import send_email
 from app.api.users import get_current_user
 
 
@@ -60,6 +62,10 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 class LoginRequest(BaseModel):
     """Login request schema."""
     email: EmailStr
@@ -77,9 +83,14 @@ class SignupRequest(UserCreate):
     pass
 
 
+class SignupResponse(BaseModel):
+    """Signup response schema."""
+    message: str
+
+
 @router.post(
     "/signup",
-    response_model=ApiResponse[LoginResponse],
+    response_model=ApiResponse[SignupResponse],
     status_code=status.HTTP_201_CREATED,
 )
 async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
@@ -108,26 +119,38 @@ async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
         hashed_password=hash_password(req.password),
         phone=req.phone,
         location=req.location,
+        email_verified=False,
     )
 
     db.add(user)
     await db.commit()
     await db.refresh(user)
 
-    # Generate token
-    access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email}
+    # Create email verification token
+    verification_token = secrets.token_urlsafe(32)
+    user.email_verification_token_hash = hash_token(verification_token)
+    user.email_verification_sent_at = datetime.utcnow()
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    verify_link = f"{settings.FRONTEND_URL}/auth/verify?token={verification_token}"
+
+    await send_email(
+        to_email=user.email,
+        subject="Verify your email - Aditus",
+        html=(
+            f"<h2>Welcome to Aditus 👋</h2>"
+            f"<p>Please verify your email to activate your account:</p>"
+            f"<p><a href='{verify_link}'>Verify Email</a></p>"
+            f"<p>If you did not create this account, please ignore this email.</p>"
+        ),
     )
 
     return ApiResponse(
         success=True,
-        data=LoginResponse(
-            user=UserResponse.model_validate(user),
-            token={
-                "access_token": access_token,
-                "token_type": "bearer",
-                "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            },
+        data=SignupResponse(
+            message="Account created successfully. Please check your email to verify your account.",
         ),
     )
 
@@ -152,6 +175,12 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
+        )
+
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in",
         )
 
     # Generate token
@@ -181,31 +210,168 @@ async def logout():
     return ApiResponse(success=True, data={"message": "Logged out successfully"})
 
 
-@router.get("/verify-email/{token}", response_model=ApiResponse)
-async def verify_email(token: str):
-    """Verify email address (placeholder for future implementation)."""
-    # TODO: Implement email verification with token
+@router.get("/verify-email", response_model=ApiResponse)
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+    """Verify email address using a token."""
+    token_hash = hash_token(token)
+    stmt = select(User).where(User.email_verification_token_hash == token_hash)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token",
+        )
+
+    user.email_verified = True
+    user.email_verification_token_hash = None
+    user.email_verification_sent_at = None
+    db.add(user)
+    await db.commit()
+
     return ApiResponse(success=True, data={"message": "Email verified"})
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
 @router.post("/forgot-password", response_model=ApiResponse)
-async def forgot_password(email: EmailStr, db: AsyncSession = Depends(get_db)):
-    """
-    Request password reset (placeholder for future implementation).
-    In production, this would send a reset link via email.
-    """
-    # TODO: Implement password reset email
-    return ApiResponse(
-        success=True,
-        data={"message": "Password reset link sent to your email"},
-    )
+async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Request password reset. Always returns success to avoid user enumeration."""
+    stmt = select(User).where(User.email == req.email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if user:
+        reset_token = secrets.token_urlsafe(32)
+        user.password_reset_token_hash = hash_token(reset_token)
+        user.password_reset_sent_at = datetime.utcnow()
+        user.password_reset_expires_at = datetime.utcnow() + timedelta(hours=1)
+        db.add(user)
+        await db.commit()
+
+        reset_link = f"{settings.FRONTEND_URL}/auth/reset-password?token={reset_token}"
+
+        await send_email(
+            to_email=user.email,
+            subject="Reset your password - Aditus",
+            html=(
+                f"<h2>Password Reset</h2>"
+                f"<p>Click the link below to reset your password. This link expires in 1 hour.</p>"
+                f"<p><a href='{reset_link}'>Reset Password</a></p>"
+            ),
+        )
+
+    return ApiResponse(success=True, data={"message": "If the email exists, a reset link has been sent."})
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 
 @router.post("/reset-password", response_model=ApiResponse)
-async def reset_password(token: str, new_password: str):
-    """Reset password using reset token (placeholder for future implementation)."""
-    # TODO: Implement password reset with token validation
+async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Reset password using reset token."""
+    token_hash = hash_token(req.token)
+    stmt = select(User).where(User.password_reset_token_hash == token_hash)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
+
+    if not user.password_reset_expires_at or user.password_reset_expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token has expired",
+        )
+
+    user.hashed_password = hash_password(req.new_password)
+    user.password_reset_token_hash = None
+    user.password_reset_sent_at = None
+    user.password_reset_expires_at = None
+    db.add(user)
+    await db.commit()
+
     return ApiResponse(success=True, data={"message": "Password reset successfully"})
+
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str
+
+
+@router.post("/google", response_model=ApiResponse[LoginResponse])
+async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
+    """Login or signup using Google OAuth ID token."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": req.id_token},
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google token",
+        )
+
+    payload = resp.json()
+    email = payload.get("email")
+    email_verified = payload.get("email_verified") == "true"
+    full_name = payload.get("name") or payload.get("given_name") or ""
+    google_sub = payload.get("sub")
+
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google token missing email",
+        )
+
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        user = User(
+            email=email,
+            full_name=full_name or email.split("@")[0],
+            hashed_password=hash_password(secrets.token_urlsafe(24)),
+            email_verified=email_verified,
+            google_sub=google_sub,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    else:
+        if email_verified and not user.email_verified:
+            user.email_verified = True
+        if google_sub and not user.google_sub:
+            user.google_sub = google_sub
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    access_token = create_access_token(
+        data={"sub": str(user.id), "email": user.email}
+    )
+
+    return ApiResponse(
+        success=True,
+        data=LoginResponse(
+            user=UserResponse.model_validate(user),
+            token={
+                "access_token": access_token,
+                "token_type": "bearer",
+                "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            },
+        ),
+    )
 
 
 # ============================================================================

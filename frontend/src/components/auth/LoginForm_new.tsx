@@ -10,6 +10,12 @@ import { apiClient } from '@/lib/api'
 import { setAuthToken } from '@/lib/auth'
 import { Input, Button, Alert } from '@/components/ui'
 
+declare global {
+  interface Window {
+    google?: any
+  }
+}
+
 export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,7 +44,6 @@ export function LoginForm() {
       })
 
       if (response.data?.data?.token) {
-        // Set auth token first
         setAuthToken(
           response.data.data.token.access_token,
           response.data.data.token.expires_in
@@ -80,7 +85,10 @@ export function LoginForm() {
 
   useEffect(() => {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    if (!clientId) return
+    if (!clientId) {
+      console.warn('NEXT_PUBLIC_GOOGLE_CLIENT_ID not configured')
+      return
+    }
 
     const loadGoogleScript = () => {
       const script = document.createElement('script')
@@ -145,7 +153,7 @@ export function LoginForm() {
               type="error"
               role="alert"
               aria-live="assertive"
-              className="border-l-4 border-brand-red bg-brand-red/10 shadow-lg"
+              className="border-l-4 border-red-500 bg-red-500/10 shadow-lg"
             >
               {error}
             </Alert>

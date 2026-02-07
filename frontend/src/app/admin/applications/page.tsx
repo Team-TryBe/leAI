@@ -83,8 +83,16 @@ export default function AdminApplicationsPage() {
       });
 
       if (!response.ok) throw new Error("Failed to fetch applications");
-      const data = await response.json();
-      setApplications(data);
+      const result = await response.json();
+      // Backend returns: { success, data: { applications, total, skip, limit } }
+      const { applications: items, total, skip, limit } = result.data || {};
+      setApplications({
+        items: items || [],
+        total: total || 0,
+        page: Math.floor((skip || 0) / limit) + 1,
+        limit: limit || itemsPerPage,
+        total_pages: Math.ceil((total || 0) / (limit || itemsPerPage)),
+      });
     } catch (error) {
       console.error("Error fetching applications:", error);
     } finally {
@@ -147,19 +155,19 @@ export default function AdminApplicationsPage() {
             <div className="bg-brand-dark-card border border-brand-dark-border rounded-xl p-4">
               <div className="text-brand-text-muted text-sm mb-1">Queued</div>
               <div className="text-3xl font-bold text-blue-500">
-                {applications?.items.filter((a) => a.status === "review").length || 0}
+                {applications?.items?.filter((a) => a.status === "review").length || 0}
               </div>
             </div>
             <div className="bg-brand-dark-card border border-brand-dark-border rounded-xl p-4">
               <div className="text-brand-text-muted text-sm mb-1">Sent</div>
               <div className="text-3xl font-bold text-green-500">
-                {applications?.items.filter((a) => a.status === "sent").length || 0}
+                {applications?.items?.filter((a) => a.status === "sent").length || 0}
               </div>
             </div>
             <div className="bg-brand-dark-card border border-brand-dark-border rounded-xl p-4">
               <div className="text-brand-text-muted text-sm mb-1">Interview Scheduled</div>
               <div className="text-3xl font-bold text-emerald-500">
-                {applications?.items.filter((a) => a.status === "interview_scheduled").length || 0}
+                {applications?.items?.filter((a) => a.status === "interview_scheduled").length || 0}
               </div>
             </div>
           </div>

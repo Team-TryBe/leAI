@@ -4,18 +4,61 @@ Only accessible to users with admin privileges.
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc
+from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 
 from app.core.admin import get_current_admin_user
 from app.db.database import get_db
-from app.db.models import User, JobApplication, JobApplicationStatus
+from app.db.models import (
+    User,
+    JobApplication,
+    JobApplicationStatus,
+    Subscription,
+    SubscriptionStatus,
+    Plan,
+    PlanType,
+    Payment,
+    PaymentStatus,
+    AdminActionLog,
+)
 from app.schemas import ApiResponse, UserResponse
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+class AdminUpdateSubscriptionRequest(BaseModel):
+    plan_type: PlanType
+    status: Optional[SubscriptionStatus] = None
+    auto_renew: Optional[bool] = None
+
+
+async def log_admin_action(
+    db: AsyncSession,
+    admin_user: User,
+    action: str,
+    target_type: Optional[str] = None,
+    target_id: Optional[int] = None,
+    details: Optional[dict] = None,
+    request: Optional[Request] = None,
+):
+    """Persist a critical admin action for auditability."""
+    ip_address = request.client.host if request and request.client else None
+    user_agent = request.headers.get("user-agent") if request else None
+    log = AdminActionLog(
+        admin_user_id=admin_user.id,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        details=details or {},
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    db.add(log)
 
 
 # ==================== Dashboard Analytics ====================
@@ -166,14 +209,157 @@ async def get_all_users(
     stmt = stmt.order_by(desc(User.created_at)).offset(skip).limit(limit)
     result = await db.execute(stmt)
     users = result.scalars().all()
+
+    # Fetch subscriptions for users in one query
+    user_ids = [user.id for user in users]
+    subscriptions_by_user_id = {}
+    if user_ids:
+        subs_result = await db.execute(
+            select(Subscription)
+            .where(Subscription.user_id.in_(user_ids))
+            .options(selectinload(Subscription.plan))
+        )
+        subscriptions = subs_result.scalars().all()
+        subscriptions_by_user_id = {sub.user_id: sub for sub in subscriptions}
+
+    users_data = []
+    for user in users:
+        user_data = UserResponse.model_validate(user).model_dump()
+        subscription = subscriptions_by_user_id.get(user.id)
+        user_data["subscription"] = None
+        if subscription and subscription.plan:
+            user_data["subscription"] = {
+                "plan_id": subscription.plan_id,
+                "plan_type": subscription.plan.plan_type.value
+                if hasattr(subscription.plan.plan_type, "value")
+                else subscription.plan.plan_type,
+                "plan_name": subscription.plan.name,
+                "status": subscription.status.value
+                if hasattr(subscription.status, "value")
+                else subscription.status,
+                "current_period_end": subscription.current_period_end.isoformat()
+                if subscription.current_period_end
+                else None,
+                "auto_renew": subscription.auto_renew,
+            }
+        users_data.append(user_data)
     
     return ApiResponse(
         success=True,
         data={
-            "users": [UserResponse.model_validate(user).model_dump() for user in users],
+            "users": users_data,
             "total": total,
             "skip": skip,
             "limit": limit,
+        },
+    )
+
+
+@router.patch("/users/{user_id}/subscription", response_model=ApiResponse[dict])
+async def update_user_subscription(
+    user_id: int,
+    request: AdminUpdateSubscriptionRequest,
+    http_request: Request,
+    admin_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin: update a user's subscription plan or status."""
+
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    plan_result = await db.execute(select(Plan).where(Plan.plan_type == request.plan_type))
+    plan = plan_result.scalar_one_or_none()
+
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plan not found",
+        )
+
+    sub_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user_id)
+        .options(selectinload(Subscription.plan))
+    )
+    subscription = sub_result.scalar_one_or_none()
+
+    previous_plan_type = (
+        subscription.plan.plan_type.value
+        if subscription and subscription.plan and hasattr(subscription.plan.plan_type, "value")
+        else (subscription.plan.plan_type if subscription and subscription.plan else None)
+    )
+
+    now = datetime.utcnow()
+
+    if not subscription:
+        subscription = Subscription(
+            user_id=user_id,
+            plan_id=plan.id,
+            status=request.status or SubscriptionStatus.ACTIVE,
+            started_at=now,
+            current_period_start=now,
+            current_period_end=now + timedelta(days=30)
+            if plan.period == "monthly"
+            else (now + timedelta(days=365) if plan.period == "annual" else None),
+            auto_renew=True if request.auto_renew is None else request.auto_renew,
+        )
+        db.add(subscription)
+    else:
+        subscription.plan_id = plan.id
+        if request.status is not None:
+            subscription.status = request.status
+        if request.auto_renew is not None:
+            subscription.auto_renew = request.auto_renew
+        subscription.updated_at = now
+        subscription.cancellation_requested = False
+        if plan.period == "monthly":
+            subscription.current_period_end = now + timedelta(days=30)
+        elif plan.period == "annual":
+            subscription.current_period_end = now + timedelta(days=365)
+
+    await log_admin_action(
+        db=db,
+        admin_user=admin_user,
+        action="update_subscription",
+        target_type="user",
+        target_id=user_id,
+        details={
+            "previous_plan": previous_plan_type,
+            "new_plan": plan.plan_type.value if hasattr(plan.plan_type, "value") else plan.plan_type,
+            "status": request.status.value if request.status else None,
+            "auto_renew": request.auto_renew,
+        },
+        request=http_request,
+    )
+
+    await db.commit()
+    await db.refresh(subscription)
+
+    return ApiResponse(
+        success=True,
+        data={
+            "user_id": user_id,
+            "subscription": {
+                "plan_id": subscription.plan_id,
+                "plan_type": plan.plan_type.value
+                if hasattr(plan.plan_type, "value")
+                else plan.plan_type,
+                "plan_name": plan.name,
+                "status": subscription.status.value
+                if hasattr(subscription.status, "value")
+                else subscription.status,
+                "current_period_end": subscription.current_period_end.isoformat()
+                if subscription.current_period_end
+                else None,
+                "auto_renew": subscription.auto_renew,
+            },
         },
     )
 
@@ -226,6 +412,7 @@ async def get_user_details(
 async def toggle_admin_status(
     user_id: int,
     make_admin: bool,
+    http_request: Request,
     admin_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -247,8 +434,22 @@ async def toggle_admin_status(
             detail="User not found",
         )
     
+    previous_is_admin = user.is_admin
     user.is_admin = make_admin
     db.add(user)
+    await log_admin_action(
+        db=db,
+        admin_user=admin_user,
+        action="toggle_admin_status",
+        target_type="user",
+        target_id=user.id,
+        details={
+            "previous_is_admin": previous_is_admin,
+            "new_is_admin": make_admin,
+            "user_email": user.email,
+        },
+        request=http_request,
+    )
     await db.commit()
     await db.refresh(user)
     
@@ -262,6 +463,7 @@ async def toggle_admin_status(
 async def toggle_active_status(
     user_id: int,
     is_active: bool,
+    http_request: Request,
     admin_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -283,8 +485,22 @@ async def toggle_active_status(
             detail="User not found",
         )
     
+    previous_is_active = user.is_active
     user.is_active = is_active
     db.add(user)
+    await log_admin_action(
+        db=db,
+        admin_user=admin_user,
+        action="toggle_active_status",
+        target_type="user",
+        target_id=user.id,
+        details={
+            "previous_is_active": previous_is_active,
+            "new_is_active": is_active,
+            "user_email": user.email,
+        },
+        request=http_request,
+    )
     await db.commit()
     await db.refresh(user)
     
@@ -297,6 +513,7 @@ async def toggle_active_status(
 @router.delete("/users/{user_id}", response_model=ApiResponse[dict])
 async def delete_user(
     user_id: int,
+    http_request: Request,
     admin_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -319,6 +536,15 @@ async def delete_user(
         )
     
     await db.delete(user)
+    await log_admin_action(
+        db=db,
+        admin_user=admin_user,
+        action="delete_user",
+        target_type="user",
+        target_id=user.id,
+        details={"user_email": user.email},
+        request=http_request,
+    )
     await db.commit()
     
     return ApiResponse(
@@ -340,7 +566,10 @@ async def get_all_applications(
 ):
     """Get paginated list of all job applications with filters."""
     
-    stmt = select(JobApplication)
+    stmt = select(JobApplication).options(
+        selectinload(JobApplication.extracted_data),
+        selectinload(JobApplication.user)
+    )
     
     if status:
         stmt = stmt.where(JobApplication.status == status.value)
@@ -364,10 +593,16 @@ async def get_all_applications(
         apps_data.append({
             "id": app.id,
             "user_id": app.user_id,
+                "user_email": app.user.email if app.user else None,
+                "user_full_name": app.user.full_name if app.user else None,
             "job_url": app.job_url,
             "status": app.status.value if hasattr(app.status, 'value') else app.status,
-            "company_name": app.company_name,
-            "job_title": app.job_title,
+            "company_name": app.extracted_data.company_name if app.extracted_data else None,
+            "job_title": app.extracted_data.job_title if app.extracted_data else None,
+                "location": app.extracted_data.location if app.extracted_data else None,
+                "submitted_at": app.submitted_at.isoformat() if app.submitted_at else None,
+                "cv_pdf_path": app.tailored_cv_pdf_path,
+                "cover_letter_pdf_path": app.cover_letter_pdf_path,
             "created_at": app.created_at.isoformat() if app.created_at else None,
             "updated_at": app.updated_at.isoformat() if app.updated_at else None,
         })
@@ -386,6 +621,7 @@ async def get_all_applications(
 @router.delete("/applications/{application_id}", response_model=ApiResponse[dict])
 async def delete_application(
     application_id: int,
+    http_request: Request,
     admin_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -402,6 +638,15 @@ async def delete_application(
         )
     
     await db.delete(application)
+    await log_admin_action(
+        db=db,
+        admin_user=admin_user,
+        action="delete_application",
+        target_type="job_application",
+        target_id=application_id,
+        details={"user_id": application.user_id},
+        request=http_request,
+    )
     await db.commit()
     
     return ApiResponse(
@@ -430,5 +675,143 @@ async def get_system_settings(
                 "email_notifications": True,
                 "job_scraping": True,
             },
+        },
+    )
+
+
+@router.get("/stats/system", response_model=ApiResponse[dict])
+async def get_system_analytics(
+    admin_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """System-wide analytics (subscriptions, revenue, admin actions)."""
+
+    # Subscriptions by status
+    subscriptions_by_status = {}
+    for status_enum in SubscriptionStatus:
+        status_stmt = select(func.count(Subscription.id)).where(
+            Subscription.status == status_enum
+        )
+        status_result = await db.execute(status_stmt)
+        subscriptions_by_status[status_enum.value] = status_result.scalar()
+
+    # Plan distribution
+    plan_distribution = {}
+    plan_stmt = (
+        select(Plan.plan_type, func.count(Subscription.id))
+        .join(Subscription, Subscription.plan_id == Plan.id)
+        .group_by(Plan.plan_type)
+    )
+    plan_result = await db.execute(plan_stmt)
+    for row in plan_result:
+        plan_distribution[
+            row.plan_type.value if hasattr(row.plan_type, "value") else row.plan_type
+        ] = row.count
+
+    # Revenue analytics
+    total_revenue_stmt = select(func.coalesce(func.sum(Payment.amount), 0)).where(
+        Payment.status == PaymentStatus.PAID
+    )
+    total_revenue_result = await db.execute(total_revenue_stmt)
+    total_revenue = total_revenue_result.scalar()
+
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    revenue_30d_stmt = select(func.coalesce(func.sum(Payment.amount), 0)).where(
+        and_(Payment.status == PaymentStatus.PAID, Payment.paid_at >= thirty_days_ago)
+    )
+    revenue_30d_result = await db.execute(revenue_30d_stmt)
+    revenue_last_30_days = revenue_30d_result.scalar()
+
+    # Payments by status
+    payments_by_status = {}
+    for status_enum in PaymentStatus:
+        pay_stmt = select(func.count(Payment.id)).where(Payment.status == status_enum)
+        pay_result = await db.execute(pay_stmt)
+        payments_by_status[status_enum.value] = pay_result.scalar()
+
+    # Admin actions (last 7 days)
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    actions_recent_stmt = select(func.count(AdminActionLog.id)).where(
+        AdminActionLog.created_at >= seven_days_ago
+    )
+    actions_recent_result = await db.execute(actions_recent_stmt)
+    actions_last_7_days = actions_recent_result.scalar()
+
+    return ApiResponse(
+        success=True,
+        data={
+            "subscriptions": {
+                "by_status": subscriptions_by_status,
+                "plan_distribution": plan_distribution,
+            },
+            "revenue": {
+                "total": total_revenue,
+                "last_30_days": revenue_last_30_days,
+                "currency": "KES",
+            },
+            "payments": {
+                "by_status": payments_by_status,
+            },
+            "admin_actions": {
+                "last_7_days": actions_last_7_days,
+            },
+            "timestamp": datetime.utcnow().isoformat(),
+        },
+    )
+
+
+@router.get("/audit-logs", response_model=ApiResponse[dict])
+async def get_admin_audit_logs(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    action: Optional[str] = Query(None),
+    admin_id: Optional[int] = Query(None),
+    target_type: Optional[str] = Query(None),
+    admin_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List admin action logs for accountability."""
+
+    stmt = select(AdminActionLog).options(selectinload(AdminActionLog.admin_user))
+
+    if action:
+        stmt = stmt.where(AdminActionLog.action == action)
+
+    if admin_id:
+        stmt = stmt.where(AdminActionLog.admin_user_id == admin_id)
+
+    if target_type:
+        stmt = stmt.where(AdminActionLog.target_type == target_type)
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    count_result = await db.execute(count_stmt)
+    total = count_result.scalar()
+
+    stmt = stmt.order_by(desc(AdminActionLog.created_at)).offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    logs = result.scalars().all()
+
+    logs_data = []
+    for log in logs:
+        logs_data.append({
+            "id": log.id,
+            "admin_user_id": log.admin_user_id,
+            "admin_email": log.admin_user.email if log.admin_user else None,
+            "action": log.action,
+            "target_type": log.target_type,
+            "target_id": log.target_id,
+            "details": log.details,
+            "ip_address": log.ip_address,
+            "user_agent": log.user_agent,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        })
+
+    return ApiResponse(
+        success=True,
+        data={
+            "logs": logs_data,
+            "total": total,
+            "skip": skip,
+            "limit": limit,
         },
     )

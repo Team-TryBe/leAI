@@ -20,7 +20,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    // Redirect is already handled by AuthContext, just show loading
     return (
       <div className="min-h-screen bg-brand-dark flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -37,8 +36,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto md:ml-64">
-        <div className="p-6 md:p-8 space-y-8">
+      <main className="flex-1 overflow-auto md:ml-56">
+        <div className="mx-auto max-w-5xl px-2 py-6 md:px-3 md:py-6 space-y-6">
           {children}
         </div>
       </main>

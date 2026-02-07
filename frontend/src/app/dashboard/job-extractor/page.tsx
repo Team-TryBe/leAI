@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
 import { 
@@ -45,12 +45,58 @@ export default function JobExtractorPage() {
   const [isExtracting, setIsExtracting] = useState(false)
   const [extractedData, setExtractedData] = useState<ExtractedJob | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
+  const [profileMissingFields, setProfileMissingFields] = useState<string[]>([])
 
   // Form inputs
   const [url, setUrl] = useState('')
   const [rawText, setRawText] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+
+  useEffect(() => {
+    checkProfileCompleteness()
+  }, [])
+
+  const checkProfileCompleteness = async () => {
+    try {
+      const token = getAuthToken()
+      if (!token) return
+
+      const response = await fetch('http://127.0.0.1:8000/api/v1/master-profile', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        const profile = result.data
+
+        const missing: string[] = []
+        if (!profile.full_name) missing.push('Full Name')
+        if (!profile.email) missing.push('Email')
+        if (!profile.phone_number) missing.push('Phone Number')
+        if (!profile.location) missing.push('Location')
+        if (!profile.personal_statement && !profile.professional_summary) missing.push('Personal Statement')
+        if (!profile.education || profile.education.length === 0) missing.push('Education')
+        if ((!profile.experience || profile.experience.length === 0) &&
+            (!profile.work_experience || profile.work_experience.length === 0) &&
+            (!profile.projects || profile.projects.length === 0)) {
+          missing.push('Work Experience or Projects')
+        }
+        if ((!profile.technical_skills || profile.technical_skills.length === 0) &&
+            (!profile.skills || profile.skills.length === 0)) {
+          missing.push('Skills')
+        }
+
+        setProfileComplete(missing.length === 0)
+        setProfileMissingFields(missing)
+      }
+    } catch (err) {
+      console.error('Failed to check profile:', err)
+    }
+  }
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -68,6 +114,17 @@ export default function JobExtractorPage() {
     setIsExtracting(true)
     setError(null)
     setExtractedData(null)
+
+    if (profileComplete === false) {
+      setError(
+        `⚠️ Master Profile Incomplete!\n\n` +
+        `Please complete your Master Profile before extracting job postings.\n\n` +
+        `Missing fields:\n${profileMissingFields.map((f) => `• ${f}`).join('\n')}`
+      )
+      setIsExtracting(false)
+      router.push('/dashboard/master-profile')
+      return
+    }
 
     try {
       const token = getAuthToken()
@@ -101,6 +158,25 @@ export default function JobExtractorPage() {
 
       if (!response.ok) {
         const errorData = await response.json()
+        
+          // Check if this is a master profile incomplete error
+          if (response.status === 403 && errorData.detail?.error === 'master_profile_incomplete') {
+            const missingFields = errorData.detail.missing_fields || []
+            setError(
+              `⚠️ Master Profile Incomplete!\n\n` +
+              `Please complete your Master Profile before extracting job postings.\n\n` +
+              `Missing fields:\n${missingFields.map((f: string) => `• ${f}`).join('\n')}\n\n` +
+              `Redirecting to Master Profile page...`
+            )
+            setIsExtracting(false)
+          
+            // Auto-redirect after 3 seconds
+            setTimeout(() => {
+              router.push('/dashboard/master-profile')
+            }, 3000)
+            return
+          }
+        
         throw new Error(errorData.detail || 'Extraction failed')
       }
 
@@ -126,194 +202,258 @@ export default function JobExtractorPage() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <Sparkles className="text-brand-primary" size={32} />
-            <h1 className="text-4xl font-display font-bold text-brand-text">Aditus Engine</h1>
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-purple-500/10 border border-indigo-500/20 p-6">
+          <div className="flex items-start justify-between">
+            <div className="space-y-3">
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-indigo-500/20 to-violet-500/20 flex items-center justify-center">
+                <Sparkles className="w-6 h-6 text-indigo-400" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-brand-text">Aditus Engine</h1>
+                <p className="text-xs text-brand-text-muted mt-1">
+                  Extract structured job data from URLs, screenshots, or manual text using AI
+                </p>
+              </div>
+            </div>
           </div>
-          <p className="text-brand-text-muted">
-            Extract structured job data from URLs, screenshots, or manual text using AI
-          </p>
         </div>
 
+        {profileComplete === false && (
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
+            <div className="relative rounded-xl bg-gradient-to-br from-yellow-500/10 via-orange-500/5 to-amber-500/10 border border-yellow-500/30 p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-yellow-500/20 to-orange-500/20 flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-5 h-5 text-yellow-400" />
+                </div>
+                <div className="space-y-3 flex-1">
+                  <h3 className="text-lg font-semibold text-yellow-300">Complete your Master Profile first</h3>
+                  <p className="text-yellow-200/80 text-sm">
+                    You must finish your Master Profile before extracting job postings.
+                  </p>
+                  {profileMissingFields.length > 0 && (
+                    <ul className="text-yellow-200/70 text-sm space-y-1">
+                      {profileMissingFields.map((field) => (
+                        <li key={field} className="flex items-start gap-2">
+                          <span className="text-yellow-400 mt-0.5">•</span>
+                          <span>{field}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <button
+                    onClick={() => router.push('/dashboard/master-profile')}
+                    className="mt-3 px-5 py-2.5 rounded-lg bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-sm font-semibold hover:shadow-lg hover:shadow-yellow-500/25 transition-all duration-300"
+                  >
+                    Go to Master Profile
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Mode Selector */}
-        <div className="card-dark p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-brand-text">Choose Input Method</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button
-              onClick={() => { setMode('url'); resetForm() }}
-              className={`p-6 rounded-lg border-2 transition-all duration-200 ${
-                mode === 'url'
-                  ? 'border-brand-primary bg-brand-primary/10'
-                  : 'border-brand-dark-border hover:border-brand-primary/50'
-              }`}
-            >
-              <div className="flex flex-col items-center gap-3">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                  mode === 'url' ? 'bg-brand-primary' : 'bg-brand-dark-border'
-                }`}>
-                  <LinkIcon className="text-white" size={24} />
-                </div>
-                <div className="text-center">
-                  <h3 className="font-semibold text-brand-text">Job URL</h3>
-                  <p className="text-xs text-brand-text-muted mt-1">
-                    BrighterMonday, Fuzu, LinkedIn, etc.
-                  </p>
-                </div>
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition duration-300"></div>
+          <div className="relative card-dark p-6 rounded-xl space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500/20 to-violet-500/20 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-indigo-400" />
               </div>
-            </button>
+              <h2 className="text-base font-semibold text-brand-text">Choose Input Method</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <button
+                onClick={() => { setMode('url'); resetForm() }}
+                className={`relative p-6 rounded-lg border-2 transition-all duration-200 ${
+                  mode === 'url'
+                    ? 'border-indigo-500/50 bg-gradient-to-br from-indigo-500/10 to-violet-500/10'
+                    : 'border-brand-dark-border hover:border-indigo-500/30 hover:bg-indigo-500/5'
+                }`}
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                    mode === 'url' ? 'bg-gradient-to-br from-indigo-500 to-violet-500' : 'bg-brand-dark-border'
+                  }`}>
+                    <LinkIcon className="text-white" size={20} />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="font-semibold text-brand-text text-sm">Job URL</h3>
+                    <p className="text-xs text-brand-text-muted mt-1">
+                      BrighterMonday, Fuzu, LinkedIn, etc.
+                    </p>
+                  </div>
+                </div>
+              </button>
 
-            <button
-              onClick={() => { setMode('image'); resetForm() }}
-              className={`p-6 rounded-lg border-2 transition-all duration-200 ${
-                mode === 'image'
-                  ? 'border-brand-primary bg-brand-primary/10'
-                  : 'border-brand-dark-border hover:border-brand-primary/50'
-              }`}
-            >
-              <div className="flex flex-col items-center gap-3">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                  mode === 'image' ? 'bg-brand-primary' : 'bg-brand-dark-border'
-                }`}>
-                  <ImageIcon className="text-white" size={24} />
+              <button
+                onClick={() => { setMode('image'); resetForm() }}
+                className={`relative p-6 rounded-lg border-2 transition-all duration-200 ${
+                  mode === 'image'
+                    ? 'border-indigo-500/50 bg-gradient-to-br from-indigo-500/10 to-violet-500/10'
+                    : 'border-brand-dark-border hover:border-indigo-500/30 hover:bg-indigo-500/5'
+                }`}
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                    mode === 'image' ? 'bg-gradient-to-br from-indigo-500 to-violet-500' : 'bg-brand-dark-border'
+                  }`}>
+                    <ImageIcon className="text-white" size={20} />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="font-semibold text-brand-text text-sm">Screenshot</h3>
+                    <p className="text-xs text-brand-text-muted mt-1">
+                      WhatsApp, Instagram, Physical poster
+                    </p>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <h3 className="font-semibold text-brand-text">Screenshot</h3>
-                  <p className="text-xs text-brand-text-muted mt-1">
-                    WhatsApp, Instagram, Physical poster
-                  </p>
-                </div>
-              </div>
-            </button>
+              </button>
 
-            <button
-              onClick={() => { setMode('text'); resetForm() }}
-              className={`p-6 rounded-lg border-2 transition-all duration-200 ${
-                mode === 'text'
-                  ? 'border-brand-primary bg-brand-primary/10'
-                  : 'border-brand-dark-border hover:border-brand-primary/50'
-              }`}
-            >
-              <div className="flex flex-col items-center gap-3">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                  mode === 'text' ? 'bg-brand-primary' : 'bg-brand-dark-border'
-                }`}>
-                  <FileText className="text-white" size={24} />
+              <button
+                onClick={() => { setMode('text'); resetForm() }}
+                className={`relative p-6 rounded-lg border-2 transition-all duration-200 ${
+                  mode === 'text'
+                    ? 'border-indigo-500/50 bg-gradient-to-br from-indigo-500/10 to-violet-500/10'
+                    : 'border-brand-dark-border hover:border-indigo-500/30 hover:bg-indigo-500/5'
+                }`}
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                    mode === 'text' ? 'bg-gradient-to-br from-indigo-500 to-violet-500' : 'bg-brand-dark-border'
+                  }`}>
+                    <FileText className="text-white" size={20} />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="font-semibold text-brand-text text-sm">Manual Text</h3>
+                    <p className="text-xs text-brand-text-muted mt-1">
+                      Copy & paste job description
+                    </p>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <h3 className="font-semibold text-brand-text">Manual Text</h3>
-                  <p className="text-xs text-brand-text-muted mt-1">
-                    Copy & paste job description
-                  </p>
-                </div>
-              </div>
-            </button>
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Input Form */}
-        <div className="card-dark p-6 space-y-6">
-          <h2 className="text-lg font-semibold text-brand-text">Input Job Data</h2>
-
-          {mode === 'url' && (
-            <div className="space-y-3">
-              <label className="text-sm font-medium text-brand-text">Job Posting URL</label>
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://brightermonday.co.ke/job/..."
-                className="w-full rounded-lg bg-brand-dark text-brand-text p-3 border border-brand-dark-border focus:border-brand-primary focus:outline-none"
-              />
-              <p className="text-xs text-brand-text-muted">
-                Supported: BrighterMonday, Fuzu, MyJobMag, LinkedIn, and most job boards
-              </p>
-            </div>
-          )}
-
-          {mode === 'image' && (
-            <div className="space-y-3">
-              <label className="text-sm font-medium text-brand-text">Upload Screenshot</label>
-              <div className="border-2 border-dashed border-brand-dark-border rounded-lg p-8 text-center">
-                {imagePreview ? (
-                  <div className="space-y-4">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="max-h-64 mx-auto rounded-lg"
-                    />
-                    <button
-                      onClick={() => {
-                        setImageFile(null)
-                        setImagePreview(null)
-                      }}
-                      className="text-brand-error text-sm hover:underline"
-                    >
-                      Remove image
-                    </button>
-                  </div>
-                ) : (
-                  <label className="cursor-pointer">
-                    <div className="flex flex-col items-center gap-3">
-                      <Upload className="text-brand-text-muted" size={48} />
-                      <div>
-                        <p className="text-brand-text font-medium">Click to upload</p>
-                        <p className="text-sm text-brand-text-muted">PNG, JPG up to 10MB</p>
-                      </div>
-                    </div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageSelect}
-                      className="hidden"
-                    />
-                  </label>
-                )}
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition duration-300"></div>
+          <div className="relative card-dark p-6 rounded-xl space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center">
+                <FileText className="w-4 h-4 text-cyan-400" />
               </div>
+              <h2 className="text-base font-semibold text-brand-text">Input Job Data</h2>
             </div>
-          )}
 
-          {mode === 'text' && (
-            <div className="space-y-3">
-              <label className="text-sm font-medium text-brand-text">Job Description Text</label>
-              <textarea
-                value={rawText}
-                onChange={(e) => setRawText(e.target.value)}
-                placeholder="Paste the full job description here..."
-                rows={12}
-                className="w-full rounded-lg bg-brand-dark text-brand-text p-3 border border-brand-dark-border focus:border-brand-primary focus:outline-none"
-              />
-            </div>
-          )}
-
-          {/* Extract Button */}
-          <button
-            onClick={handleExtract}
-            disabled={isExtracting || (!url && !imageFile && !rawText)}
-            className="w-full py-3 px-6 rounded-lg bg-brand-primary text-white font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isExtracting ? (
-              <>
-                <Loader2 className="animate-spin" size={20} />
-                Extracting with AI...
-              </>
-            ) : (
-              <>
-                <Sparkles size={20} />
-                Extract Job Data
-              </>
+            {mode === 'url' && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-brand-text-muted uppercase tracking-wider">Job Posting URL</label>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://brightermonday.co.ke/job/..."
+                  className="w-full rounded-lg bg-brand-dark-border border border-brand-dark-border text-brand-text p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition"
+                />
+                <p className="text-xs text-brand-text-muted mt-1">
+                  Supported: BrighterMonday, Fuzu, MyJobMag, LinkedIn, and most job boards
+                </p>
+              </div>
             )}
-          </button>
+
+            {mode === 'image' && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-brand-text-muted uppercase tracking-wider">Upload Screenshot</label>
+                <div className="border-2 border-dashed border-brand-dark-border rounded-lg p-8 text-center hover:border-indigo-500/30 transition">
+                  {imagePreview ? (
+                    <div className="space-y-4">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="max-h-64 mx-auto rounded-lg border border-brand-dark-border"
+                      />
+                      <button
+                        onClick={() => {
+                          setImageFile(null)
+                          setImagePreview(null)
+                        }}
+                        className="px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm font-medium hover:bg-red-500/20 transition"
+                      >
+                        Remove image
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-indigo-500/20 to-violet-500/20 flex items-center justify-center">
+                          <Upload className="text-indigo-400" size={32} />
+                        </div>
+                        <div>
+                          <p className="text-brand-text font-medium text-sm">Click to upload</p>
+                          <p className="text-xs text-brand-text-muted mt-1">PNG, JPG up to 10MB</p>
+                        </div>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {mode === 'text' && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-brand-text-muted uppercase tracking-wider">Job Description Text</label>
+                <textarea
+                  value={rawText}
+                  onChange={(e) => setRawText(e.target.value)}
+                  placeholder="Paste the full job description here..."
+                  rows={12}
+                  className="w-full rounded-lg bg-brand-dark-border border border-brand-dark-border text-brand-text p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition"
+                />
+              </div>
+            )}
+
+            {/* Extract Button */}
+            <button
+              onClick={handleExtract}
+              disabled={isExtracting || (!url && !imageFile && !rawText)}
+              className="w-full py-3 px-6 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-semibold hover:shadow-lg hover:shadow-indigo-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2"
+            >
+              {isExtracting ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  <span>Extracting with AI...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={18} />
+                  <span>Extract Job Data</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Error Display */}
         {error && (
-          <div className="card-dark p-4 border-l-4 border-brand-error bg-brand-error/10">
-            <div className="flex items-start gap-3">
-              <XCircle className="text-brand-error flex-shrink-0" size={20} />
-              <div>
-                <h3 className="font-semibold text-brand-error">Extraction Failed</h3>
-                <p className="text-sm text-brand-text-muted mt-1">{error}</p>
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500/20 to-rose-500/20 rounded-xl blur opacity-75"></div>
+            <div className="relative rounded-xl bg-gradient-to-br from-red-500/10 via-rose-500/5 to-red-500/10 border border-red-500/30 p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-red-500/20 to-rose-500/20 flex items-center justify-center flex-shrink-0">
+                  <XCircle className="w-5 h-5 text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-red-400 text-base">Extraction Failed</h3>
+                  <p className="text-sm text-red-300/80 mt-2">{error}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -321,131 +461,136 @@ export default function JobExtractorPage() {
 
         {/* Extracted Data Display */}
         {extractedData && (
-          <div className="card-dark p-6 space-y-6 border-l-4 border-brand-success">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="text-brand-success" size={24} />
-                <h2 className="text-xl font-semibold text-brand-text">Extraction Successful</h2>
-              </div>
-              <button
-                onClick={resetForm}
-                className="text-sm text-brand-accent hover:underline"
-              >
-                Extract Another
-              </button>
-            </div>
-
-            {/* Job Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-xs text-brand-text-muted">Job Title</p>
-                <p className="text-lg font-semibold text-brand-text">{extractedData.job_title}</p>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs text-brand-text-muted">Company</p>
-                <p className="text-lg font-semibold text-brand-text flex items-center gap-2">
-                  <Building2 size={18} />
-                  {extractedData.company_name}
-                </p>
-              </div>
-            </div>
-
-            {/* Job Details Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {extractedData.location && (
-                <div className="p-3 rounded-lg bg-brand-dark-border">
-                  <div className="flex items-center gap-2 text-brand-text-muted mb-1">
-                    <MapPin size={16} />
-                    <span className="text-xs">Location</span>
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-xl blur opacity-75"></div>
+            <div className="relative rounded-xl bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-teal-500/10 border border-green-500/30 p-6 space-y-6">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center">
+                    <CheckCircle2 className="w-5 h-5 text-green-400" />
                   </div>
-                  <p className="text-sm font-medium text-brand-text">{extractedData.location}</p>
+                  <h2 className="text-xl font-semibold text-green-400">Extraction Successful</h2>
+                </div>
+                <button
+                  onClick={resetForm}
+                  className="text-sm text-green-400 hover:text-green-300 transition"
+                >
+                  Extract Another
+                </button>
+              </div>
+
+              {/* Job Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-brand-dark-border border border-green-500/20">
+                  <p className="text-xs text-brand-text-muted uppercase tracking-wider mb-1">Job Title</p>
+                  <p className="text-base font-semibold text-brand-text">{extractedData.job_title}</p>
+                </div>
+                <div className="p-4 rounded-lg bg-brand-dark-border border border-green-500/20">
+                  <p className="text-xs text-brand-text-muted uppercase tracking-wider mb-1">Company</p>
+                  <p className="text-base font-semibold text-brand-text flex items-center gap-2">
+                    <Building2 size={16} />
+                    {extractedData.company_name}
+                  </p>
+                </div>
+              </div>
+
+              {/* Job Details Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {extractedData.location && (
+                  <div className="p-3 rounded-lg bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20">
+                    <div className="flex items-center gap-2 text-cyan-400 mb-1">
+                      <MapPin size={14} />
+                      <span className="text-xs font-medium">Location</span>
+                    </div>
+                    <p className="text-sm text-brand-text">{extractedData.location}</p>
+                  </div>
+                )}
+                {extractedData.job_level && (
+                  <div className="p-3 rounded-lg bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20">
+                    <div className="flex items-center gap-2 text-purple-400 mb-1">
+                      <Briefcase size={14} />
+                      <span className="text-xs font-medium">Level</span>
+                    </div>
+                    <p className="text-sm text-brand-text">{extractedData.job_level}</p>
+                  </div>
+                )}
+                {extractedData.employment_type && (
+                  <div className="p-3 rounded-lg bg-gradient-to-br from-orange-500/10 to-amber-500/10 border border-orange-500/20">
+                    <div className="flex items-center gap-2 text-orange-400 mb-1">
+                      <Clock size={14} />
+                      <span className="text-xs font-medium">Type</span>
+                    </div>
+                    <p className="text-sm text-brand-text">{extractedData.employment_type}</p>
+                  </div>
+                )}
+                {extractedData.salary_range && (
+                  <div className="p-3 rounded-lg bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20">
+                    <div className="flex items-center gap-2 text-emerald-400 mb-1">
+                      <DollarSign size={14} />
+                      <span className="text-xs font-medium">Salary</span>
+                    </div>
+                    <p className="text-sm text-brand-text">{extractedData.salary_range}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Requirements */}
+              {extractedData.key_requirements?.length > 0 && (
+                <div className="p-4 rounded-lg bg-brand-dark-border border border-green-500/20 space-y-3">
+                  <h3 className="font-semibold text-brand-text text-sm">Key Requirements</h3>
+                  <ul className="space-y-2">
+                    {extractedData.key_requirements.map((req, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm text-brand-text-muted">
+                        <span className="text-green-400 mt-0.5">•</span>
+                        <span>{req}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
-              {extractedData.job_level && (
-                <div className="p-3 rounded-lg bg-brand-dark-border">
-                  <div className="flex items-center gap-2 text-brand-text-muted mb-1">
-                    <Briefcase size={16} />
-                    <span className="text-xs">Level</span>
+
+              {/* Preferred Skills */}
+              {extractedData.preferred_skills?.length > 0 && (
+                <div className="p-4 rounded-lg bg-brand-dark-border border border-green-500/20 space-y-3">
+                  <h3 className="font-semibold text-brand-text text-sm">Preferred Skills</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {extractedData.preferred_skills.map((skill, idx) => (
+                      <span
+                        key={idx}
+                        className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-400 text-xs font-medium border border-green-500/30"
+                      >
+                        {skill}
+                      </span>
+                    ))}
                   </div>
-                  <p className="text-sm font-medium text-brand-text">{extractedData.job_level}</p>
                 </div>
               )}
-              {extractedData.employment_type && (
-                <div className="p-3 rounded-lg bg-brand-dark-border">
-                  <div className="flex items-center gap-2 text-brand-text-muted mb-1">
-                    <Clock size={16} />
-                    <span className="text-xs">Type</span>
-                  </div>
-                  <p className="text-sm font-medium text-brand-text">{extractedData.employment_type}</p>
+
+              {/* Job Description */}
+              {extractedData.job_description && (
+                <div className="p-4 rounded-lg bg-brand-dark-border border border-green-500/20 space-y-3">
+                  <h3 className="font-semibold text-brand-text text-sm">Full Description</h3>
+                  <p className="text-sm text-brand-text-muted whitespace-pre-line leading-relaxed">
+                    {extractedData.job_description}
+                  </p>
                 </div>
               )}
-              {extractedData.salary_range && (
-                <div className="p-3 rounded-lg bg-brand-dark-border">
-                  <div className="flex items-center gap-2 text-brand-text-muted mb-1">
-                    <DollarSign size={16} />
-                    <span className="text-xs">Salary</span>
-                  </div>
-                  <p className="text-sm font-medium text-brand-text">{extractedData.salary_range}</p>
-                </div>
-              )}
-            </div>
 
-            {/* Requirements */}
-            {extractedData.key_requirements?.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="font-semibold text-brand-text">Key Requirements</h3>
-                <ul className="space-y-2">
-                  {extractedData.key_requirements.map((req, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-brand-text-muted">
-                      <span className="text-brand-primary mt-1">•</span>
-                      {req}
-                    </li>
-                  ))}
-                </ul>
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-green-500/20">
+                <button
+                  onClick={() => router.push(`/dashboard/applications/new?extracted=true&job_id=${extractedData.id}`)}
+                  className="flex-1 py-2.5 px-4 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300"
+                >
+                  Start Application
+                </button>
+                <button
+                  onClick={resetForm}
+                  className="px-4 py-2.5 rounded-lg border border-brand-dark-border text-brand-text hover:bg-brand-dark-border transition"
+                >
+                  Extract Another
+                </button>
               </div>
-            )}
-
-            {/* Preferred Skills */}
-            {extractedData.preferred_skills?.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="font-semibold text-brand-text">Preferred Skills</h3>
-                <div className="flex flex-wrap gap-2">
-                  {extractedData.preferred_skills.map((skill, idx) => (
-                    <span
-                      key={idx}
-                      className="px-3 py-1 rounded-full bg-brand-primary/20 text-brand-primary text-xs font-medium"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Job Description */}
-            {extractedData.job_description && (
-              <div className="space-y-3">
-                <h3 className="font-semibold text-brand-text">Full Description</h3>
-                <p className="text-sm text-brand-text-muted whitespace-pre-line">
-                  {extractedData.job_description}
-                </p>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 pt-4 border-t border-brand-dark-border">
-              <button
-                onClick={() => router.push(`/dashboard/applications/new?extracted=true&job_id=${extractedData.id}`)}
-                className="flex-1 py-2 px-4 rounded-lg bg-brand-primary text-white font-semibold hover:opacity-90 transition"
-              >
-                Start Application
-              </button>
-              <button
-                onClick={resetForm}
-                className="px-4 py-2 rounded-lg border border-brand-dark-border text-brand-text hover:bg-brand-dark-border transition"
-              >
-                Extract Another
-              </button>
             </div>
           </div>
         )}

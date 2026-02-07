@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, BarChart3, Settings, CreditCard, Home, Menu, X, FileText, Sparkles, Send } from 'lucide-react'
+import { LogOut, Settings, CreditCard, Home, Menu, X, FileText, Sparkles, Send } from 'lucide-react'
 import { useState } from 'react'
 import { removeAuthToken } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
@@ -17,11 +17,14 @@ export function Sidebar() {
     router.push('/auth/login')
   }
 
-  const menuItems = [
+  const coreFlowItems = [
     { href: '/dashboard', icon: Home, label: 'Overview' },
     { href: '/dashboard/job-extractor', icon: Sparkles, label: 'Job Extractor' },
     { href: '/dashboard/master-cv', icon: FileText, label: 'Master CV' },
     { href: '/dashboard/applications', icon: Send, label: 'Applications' },
+  ]
+
+  const accountItems = [
     { href: '/dashboard/subscription', icon: CreditCard, label: 'Subscription' },
     { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
   ]
@@ -35,7 +38,7 @@ export function Sidebar() {
         onClick={() => setIsOpen(!isOpen)}
         className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-lg bg-brand-primary text-white"
       >
-        {isOpen ? <X size={24} /> : <Menu size={24} />}
+        {isOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
       {/* Backdrop */}
@@ -48,43 +51,67 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 h-screen w-64 bg-brand-dark-card border-r border-brand-dark-border z-40 transform transition-transform duration-300 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        }`}
+        className={`fixed left-0 top-0 h-screen w-52 bg-brand-dark border-r border-brand-dark-border z-40 transform transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
-        <div className="flex flex-col h-full p-6 space-y-8">
+        <div className="flex flex-col h-full p-3 space-y-4">
           {/* Logo */}
           <Link
             href="/dashboard"
-            className="text-2xl font-display font-bold bg-gradient-brand bg-clip-text text-transparent"
+            className="text-lg font-display font-bold bg-gradient-brand bg-clip-text text-transparent"
           >
-            LeAI
+            Aditus
           </Link>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-2">
-            {menuItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-                  isActive(item.href)
-                    ? 'bg-brand-primary text-white'
-                    : 'text-brand-text-muted hover:bg-brand-dark-border hover:text-brand-text'
-                }`}
-              >
-                <item.icon size={20} />
-                <span className="font-medium">{item.label}</span>
-              </Link>
-            ))}
+          <nav className="flex-1 space-y-4">
+            <div className="space-y-1">
+              <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">
+                Core Journey
+              </p>
+              {coreFlowItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition ${
+                    isActive(item.href)
+                      ? 'bg-brand-primary text-white'
+                      : 'text-brand-text-muted hover:bg-brand-dark-border hover:text-brand-text'
+                  }`}
+                >
+                  <item.icon size={16} />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
+
+            <div className="space-y-1">
+              <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">
+                Account
+              </p>
+              {accountItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition ${
+                    isActive(item.href)
+                      ? 'bg-brand-primary text-white'
+                      : 'text-brand-text-muted hover:bg-brand-dark-border hover:text-brand-text'
+                  }`}
+                >
+                  <item.icon size={16} />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
           </nav>
 
           {/* User Info & Logout */}
-          <div className="space-y-4 border-t border-brand-dark-border pt-4">
-            <div className="px-4 py-2">
-              <p className="text-xs text-brand-text-muted">Logged in as</p>
-              <p className="text-sm font-semibold text-brand-text truncate">
+          <div className="space-y-3 border-t border-brand-dark-border pt-3">
+            <div className="px-2.5 py-2">
+              <p className="text-xs text-brand-text-muted">Account</p>
+              <p className="text-xs font-semibold text-brand-text truncate mt-1">
                 {typeof window !== 'undefined'
                   ? JSON.parse(localStorage.getItem('user') || '{}')?.email || 'User'
                   : 'User'}
@@ -92,9 +119,9 @@ export function Sidebar() {
             </div>
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-error/20 text-brand-error hover:bg-brand-error/30 transition"
+              className="w-full flex items-center justify-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium bg-brand-error/10 text-brand-error hover:bg-brand-error/20 transition"
             >
-              <LogOut size={18} />
+              <LogOut size={14} />
               <span>Sign Out</span>
             </button>
           </div>
