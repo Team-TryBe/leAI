@@ -200,6 +200,67 @@ async def queue_application(
         raise HTTPException(status_code=500, detail=f"Failed to queue application: {str(e)}")
 
 
+class SaveExtractionRequest(BaseModel):
+    """Request to save extracted job data to applications."""
+    extracted_job_id: int
+    job_title: str
+    company_name: str
+    location: Optional[str] = None
+    job_description: Optional[str] = None
+
+
+@router.post("/applications/from-extraction", response_model=ApiResponse[dict])
+async def save_extraction_to_application(
+    request: SaveExtractionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save extracted job data as a new application (DRAFT status)."""
+    try:
+        # Fetch the extracted job data
+        result = await db.execute(
+            select(ExtractedJobData).where(ExtractedJobData.id == request.extracted_job_id)
+        )
+        extracted_data = result.scalar_one_or_none()
+
+        if not extracted_data:
+            raise HTTPException(status_code=404, detail="Extracted job not found")
+
+        # Create a new job application in DRAFT status (no CV/CL yet)
+        job_application = JobApplication(
+            user_id=current_user.id,
+            extracted_data_id=request.extracted_job_id,
+            job_url=extracted_data.job_url,
+            status=JobApplicationStatus.DRAFT,
+            tailored_cv="{}",  # Empty CV JSON, user will generate later
+            cover_letter="{}",  # Empty cover letter JSON
+        )
+
+        db.add(job_application)
+        await db.commit()
+        await db.refresh(job_application)
+
+        print(f"✅ Application saved from extraction: {job_application.id}")
+        return ApiResponse(
+            success=True,
+            message="Job extracted and saved to applications",
+            data={
+                "application_id": job_application.id,
+                "status": job_application.status,
+                "job_title": extracted_data.job_title,
+                "company_name": extracted_data.company_name,
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"❌ Error saving extraction: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to save extraction: {str(e)}")
+
+
 @router.get("/applications")
 async def get_applications(
     page: int = Query(1, ge=1),

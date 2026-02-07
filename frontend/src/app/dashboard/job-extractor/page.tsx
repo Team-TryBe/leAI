@@ -213,48 +213,25 @@ export default function JobExtractorPage() {
     }
   }
 
-  const handleSaveExtraction = async () => {
+  const handleSaveJobDescription = async () => {
     if (!extractedData) return
 
+    // The extraction is already saved to the backend when extracted
+    // This function simply confirms the save and provides next steps
     setIsSaving(true)
-    setSaveSuccess(false)
+    setSaveSuccess(true)
 
-    try {
-      const token = getAuthToken()
-      if (!token) {
-        setError('Authentication required. Please log in.')
-        return
-      }
-
-      const response = await fetch('http://127.0.0.1:8000/api/v1/applications/from-extraction', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          extracted_job_id: extractedData.id,
-          job_title: extractedData.job_title,
-          company_name: extractedData.company_name,
-          location: extractedData.location,
-          job_description: extractedData.job_description,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to save extraction')
-      }
-
-      setSaveSuccess(true)
-      setTimeout(() => {
-        router.push('/dashboard/applications')
-      }, 2000)
-    } catch (err: any) {
-      setError(err.message || 'Failed to save extraction')
-    } finally {
+    setTimeout(() => {
+      // Reset to allow extracting another job
+      resetForm()
       setIsSaving(false)
-    }
+    }, 2000)
+  }
+
+  const handleUseForApplication = () => {
+    if (!extractedData?.id) return
+    // Navigate to create a new application with this extracted job data
+    router.push(`/dashboard/applications/new?job_id=${extractedData.id}`)
   }
 
   const resetForm = () => {
@@ -656,34 +633,46 @@ export default function JobExtractorPage() {
                 {saveSuccess && (
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
                     <CheckCircle2 size={16} className="text-green-400" />
-                    <span className="text-sm text-green-400">Job saved! Redirecting...</span>
+                    <span className="text-sm text-green-400">Job description saved successfully!</span>
                   </div>
                 )}
-                <div className="flex gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <button
-                    onClick={handleSaveExtraction}
+                    onClick={handleSaveJobDescription}
                     disabled={isSaving || saveSuccess}
-                    className="flex-1 py-2.5 px-4 rounded-lg bg-gradient-to-r from-brand-primary to-brand-accent text-white font-semibold hover:shadow-lg hover:shadow-brand-primary/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2"
+                    className="py-2.5 px-4 rounded-lg bg-gradient-to-r from-brand-primary to-brand-accent text-white font-semibold hover:shadow-lg hover:shadow-brand-primary/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2"
                   >
                     {isSaving ? (
                       <>
                         <Loader2 size={16} className="animate-spin" />
                         <span>Saving...</span>
                       </>
+                    ) : saveSuccess ? (
+                      <>
+                        <CheckCircle2 size={16} />
+                        <span>Saved</span>
+                      </>
                     ) : (
                       <>
                         <Save size={16} />
-                        <span>Save to Applications</span>
+                        <span>Save Job Description</span>
                       </>
                     )}
                   </button>
                   <button
-                    onClick={resetForm}
-                    className="px-4 py-2.5 rounded-lg border border-brand-dark-border text-brand-text hover:bg-brand-dark-border transition"
+                    onClick={handleUseForApplication}
+                    className="py-2.5 px-4 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center justify-center gap-2"
                   >
-                    Extract Another
+                    <FileText size={16} />
+                    <span>Use for Application</span>
                   </button>
                 </div>
+                <button
+                  onClick={resetForm}
+                  className="w-full px-4 py-2.5 rounded-lg border border-brand-dark-border text-brand-text hover:bg-brand-dark-border transition"
+                >
+                  Extract Another
+                </button>
               </div>
             </div>
           </div>
