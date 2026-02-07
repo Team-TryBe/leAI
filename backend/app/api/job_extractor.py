@@ -594,10 +594,10 @@ async def get_recent_extractions(
     # Since extracted_job_data doesn't have user_id, we get them through job_applications
     stmt = (
         select(ExtractedJobData)
-        .join(JobApplication, ExtractedJobData.id == JobApplication.extracted_job_id, isouter=True)
+        .join(JobApplication, ExtractedJobData.id == JobApplication.extracted_data_id, isouter=True)
         .where(
             (JobApplication.user_id == current_user.id) |
-            (JobApplication.extracted_job_id == ExtractedJobData.id)
+            (JobApplication.extracted_data_id == ExtractedJobData.id)
         )
         .order_by(ExtractedJobData.created_at.desc())
         .distinct()
@@ -624,7 +624,7 @@ async def search_extractions(
     """Search and filter saved job extractions."""
     stmt = (
         select(ExtractedJobData)
-        .join(JobApplication, ExtractedJobData.id == JobApplication.extracted_job_id, isouter=True)
+        .join(JobApplication, ExtractedJobData.id == JobApplication.extracted_data_id, isouter=True)
         .where(JobApplication.user_id == current_user.id)
         .order_by(ExtractedJobData.created_at.desc())
     )
