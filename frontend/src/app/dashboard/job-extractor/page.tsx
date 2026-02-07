@@ -18,7 +18,9 @@ import {
   Building2,
   DollarSign,
   Briefcase,
-  AlertCircle
+  AlertCircle,
+  X,
+  Save
 } from 'lucide-react'
 import { getAuthToken } from '@/lib/auth'
 
@@ -47,12 +49,14 @@ export default function JobExtractorPage() {
   const [error, setError] = useState<string | null>(null)
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
   const [profileMissingFields, setProfileMissingFields] = useState<string[]>([])
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
 
   // Form inputs
   const [url, setUrl] = useState('')
   const [rawText, setRawText] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
 
   useEffect(() => {
     checkProfileCompleteness()
@@ -99,15 +103,33 @@ export default function JobExtractorPage() {
   }
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setImageFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+    const files = e.target.files
+    if (files) {
+      const newFiles = Array.from(files).slice(0, 3 - imageFiles.length)
+      const updatedFiles = [...imageFiles, ...newFiles]
+      setImageFiles(updatedFiles.slice(0, 3))
+
+      const newPreviews: string[] = []
+      let loadedCount = 0
+      newFiles.forEach((file) => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          newPreviews.push(reader.result as string)
+          loadedCount++
+          if (loadedCount === newFiles.length) {
+            setImagePreviews([...imagePreviews, ...newPreviews].slice(0, 3))
+          }
+        }
+        reader.readAsDataURL(file)
+      })
     }
+  }
+
+  const removeImage = (index: number) => {
+    const updatedFiles = imageFiles.filter((_, i) => i !== index)
+    const updatedPreviews = imagePreviews.filter((_, i) => i !== index)
+    setImageFiles(updatedFiles)
+    setImagePreviews(updatedPreviews)
   }
 
   const handleExtract = async () => {
@@ -138,8 +160,10 @@ export default function JobExtractorPage() {
 
       if (mode === 'url' && url) {
         formData.append('url', url)
-      } else if (mode === 'image' && imageFile) {
-        formData.append('image', imageFile)
+      } else if (mode === 'image' && imageFiles.length > 0) {
+        imageFiles.forEach((file, index) => {
+          formData.append(`image`, file)
+        })
       } else if (mode === 'text' && rawText) {
         formData.append('raw_text', rawText)
       } else {
@@ -189,13 +213,58 @@ export default function JobExtractorPage() {
     }
   }
 
+  const handleSaveExtraction = async () => {
+    if (!extractedData) return
+
+    setIsSaving(true)
+    setSaveSuccess(false)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        setError('Authentication required. Please log in.')
+        return
+      }
+
+      const response = await fetch('http://127.0.0.1:8000/api/v1/applications/from-extraction', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          extracted_job_id: extractedData.id,
+          job_title: extractedData.job_title,
+          company_name: extractedData.company_name,
+          location: extractedData.location,
+          job_description: extractedData.job_description,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to save extraction')
+      }
+
+      setSaveSuccess(true)
+      setTimeout(() => {
+        router.push('/dashboard/applications')
+      }, 2000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to save extraction')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const resetForm = () => {
     setUrl('')
     setRawText('')
-    setImageFile(null)
-    setImagePreview(null)
+    setImageFiles([])
+    setImagePreviews([])
     setExtractedData(null)
     setError(null)
+    setSaveSuccess(false)
   }
 
   return (
@@ -364,46 +433,52 @@ export default function JobExtractorPage() {
             )}
 
             {mode === 'image' && (
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-brand-text-muted uppercase tracking-wider">Upload Screenshot</label>
-                <div className="border-2 border-dashed border-brand-dark-border rounded-lg p-8 text-center hover:border-indigo-500/30 transition">
-                  {imagePreview ? (
-                    <div className="space-y-4">
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="max-h-64 mx-auto rounded-lg border border-brand-dark-border"
-                      />
-                      <button
-                        onClick={() => {
-                          setImageFile(null)
-                          setImagePreview(null)
-                        }}
-                        className="px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm font-medium hover:bg-red-500/20 transition"
-                      >
-                        Remove image
-                      </button>
-                    </div>
-                  ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-brand-text-muted uppercase tracking-wider">Upload Screenshots (up to 3)</label>
+                  <span className="text-xs text-brand-text-muted">{imagePreviews.length}/3</span>
+                </div>
+                {imagePreviews.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {imagePreviews.map((preview, index) => (
+                      <div key={index} className="relative group/img">
+                        <img
+                          src={preview}
+                          alt={`Preview ${index + 1}`}
+                          className="w-full h-40 object-cover rounded-lg border border-brand-dark-border"
+                        />
+                        <button
+                          onClick={() => removeImage(index)}
+                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-red-500/80 text-white opacity-0 group-hover/img:opacity-100 transition hover:bg-red-600"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {imagePreviews.length < 3 && (
+                  <div className="border-2 border-dashed border-brand-dark-border rounded-lg p-8 text-center hover:border-indigo-500/30 transition">
                     <label className="cursor-pointer">
                       <div className="flex flex-col items-center gap-3">
                         <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-indigo-500/20 to-violet-500/20 flex items-center justify-center">
                           <Upload className="text-indigo-400" size={32} />
                         </div>
                         <div>
-                          <p className="text-brand-text font-medium text-sm">Click to upload</p>
+                          <p className="text-brand-text font-medium text-sm">Click to add more</p>
                           <p className="text-xs text-brand-text-muted mt-1">PNG, JPG up to 10MB</p>
                         </div>
                       </div>
                       <input
                         type="file"
+                        multiple
                         accept="image/*"
                         onChange={handleImageSelect}
                         className="hidden"
                       />
                     </label>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -423,7 +498,7 @@ export default function JobExtractorPage() {
             {/* Extract Button */}
             <button
               onClick={handleExtract}
-              disabled={isExtracting || (!url && !imageFile && !rawText)}
+              disabled={isExtracting || (mode === 'url' && !url) || (mode === 'image' && imageFiles.length === 0) || (mode === 'text' && !rawText)}
               className="w-full py-3 px-6 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-semibold hover:shadow-lg hover:shadow-indigo-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2"
             >
               {isExtracting ? (
@@ -577,19 +652,38 @@ export default function JobExtractorPage() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex gap-3 pt-4 border-t border-green-500/20">
-                <button
-                  onClick={() => router.push(`/dashboard/applications/new?extracted=true&job_id=${extractedData.id}`)}
-                  className="flex-1 py-2.5 px-4 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300"
-                >
-                  Start Application
-                </button>
-                <button
-                  onClick={resetForm}
-                  className="px-4 py-2.5 rounded-lg border border-brand-dark-border text-brand-text hover:bg-brand-dark-border transition"
-                >
-                  Extract Another
-                </button>
+              <div className="space-y-3 pt-4 border-t border-green-500/20">
+                {saveSuccess && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <CheckCircle2 size={16} className="text-green-400" />
+                    <span className="text-sm text-green-400">Job saved! Redirecting...</span>
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleSaveExtraction}
+                    disabled={isSaving || saveSuccess}
+                    className="flex-1 py-2.5 px-4 rounded-lg bg-gradient-to-r from-brand-primary to-brand-accent text-white font-semibold hover:shadow-lg hover:shadow-brand-primary/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} />
+                        <span>Save to Applications</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={resetForm}
+                    className="px-4 py-2.5 rounded-lg border border-brand-dark-border text-brand-text hover:bg-brand-dark-border transition"
+                  >
+                    Extract Another
+                  </button>
+                </div>
               </div>
             </div>
           </div>

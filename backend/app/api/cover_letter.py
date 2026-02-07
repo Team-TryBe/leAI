@@ -78,12 +78,13 @@ Write a compelling, professional cover letter for a Kenyan job application that:
 
 **Critical Rules:**
 
-1. **Structure**:
-   - Opening: Address hiring manager (use "Dear Hiring Manager" if name unknown)
-   - Introduction: State the position and express enthusiasm
+1. **Structure** (DO NOT DUPLICATE):
+   - Opening: "Dear Hiring Manager," (ONLY ONCE at start)
+   - Introduction: State the position and express enthusiasm (in first paragraph only)
    - Body Paragraphs (2-3): Match experience to job requirements with specific examples
    - Closing: Express availability, thank them, and include call to action
-   - Sign-off: "Yours faithfully" or "Yours sincerely" (Kenyan convention)
+   - Sign-off: "Yours sincerely," (Kenyan convention) - ONLY ONCE at the very end
+   - Signature: [Full Name], [Phone], [Email]
 
 2. **Tone**: {tone} - Professional yet personable, confident but not arrogant
 
@@ -114,18 +115,20 @@ Write a compelling, professional cover letter for a Kenyan job application that:
    - Being overly casual or formal
    - Making it about what company can do for you
    - Hallucinating experiences or skills
+   - DUPLICATE greetings (only "Dear Hiring Manager," once)
+   - DUPLICATE sign-offs (only "Yours sincerely," once)
 
 7. **Length**: 250-400 words (3-4 paragraphs after opening)
 
 **Output Format:**
-Return ONLY a valid JSON object with this structure:
+Return ONLY a valid JSON object with this structure (NO DUPLICATES):
 
 {{
-  "opening": "Dear Hiring Manager,\n\nI am writing to...",
-  "body_paragraph_1": "With X years of experience in...",
-  "body_paragraph_2": "In my previous role at...",
-  "body_paragraph_3": "I am particularly drawn to [Company] because...",
-  "closing": "I am available for an interview at your earliest convenience...",
+  "opening": "Dear Hiring Manager,",
+  "body_paragraph_1": "I am writing to apply for the [Job Title] position at [Company]. With [X] years of experience in...",
+  "body_paragraph_2": "In my previous role at [Company], I [specific achievement relevant to job]. This demonstrates my ability to...",
+  "body_paragraph_3": "I am particularly drawn to [Company] because [specific reason showing company research]. I am confident that my [specific skill/experience] would enable me to contribute meaningfully to your team.",
+  "closing": "I would welcome the opportunity to discuss how my background aligns with your needs. I am available for an interview at your earliest convenience.",
   "signature": "Yours sincerely,\n\n[Full Name]\n[Phone]\n[Email]",
   "key_points_highlighted": [
     "Addressed requirement: [specific requirement]",
@@ -135,12 +138,14 @@ Return ONLY a valid JSON object with this structure:
   "subject_line": "Application for [Job Title] Position - [Your Name]"
 }}
 
-**Important Notes**:
+**CRITICAL REMINDERS**:
 - Do NOT invent experiences not in the master profile
 - Use actual data from the profile (companies, dates, achievements)
 - Keep it authentic and genuine
 - Make it specific to THIS job and company
 - Ensure perfect grammar and spelling
+- NO DUPLICATE GREETINGS
+- NO DUPLICATE SIGN-OFFS
 """
 
 
@@ -277,15 +282,32 @@ async def generate_cover_letter(
         # Parse the response
         cover_letter_data = extract_json_from_response(response.text)
         
-        # Combine all paragraphs into full content
-        full_content = "\n\n".join([
-            cover_letter_data.get("opening", ""),
-            cover_letter_data.get("body_paragraph_1", ""),
-            cover_letter_data.get("body_paragraph_2", ""),
-            cover_letter_data.get("body_paragraph_3", ""),
-            cover_letter_data.get("closing", ""),
-            cover_letter_data.get("signature", "")
-        ]).strip()
+        # Combine paragraphs into full content, preventing duplicates
+        parts = []
+        
+        # Add opening (e.g., "Dear Hiring Manager,")
+        opening = cover_letter_data.get("opening", "").strip()
+        if opening:
+            parts.append(opening)
+        
+        # Add body paragraphs
+        for key in ["body_paragraph_1", "body_paragraph_2", "body_paragraph_3"]:
+            paragraph = cover_letter_data.get(key, "").strip()
+            if paragraph:
+                parts.append(paragraph)
+        
+        # Add closing
+        closing = cover_letter_data.get("closing", "").strip()
+        if closing:
+            parts.append(closing)
+        
+        # Add signature (which includes the sign-off like "Yours sincerely,")
+        signature = cover_letter_data.get("signature", "").strip()
+        if signature:
+            parts.append(signature)
+        
+        # Join all parts with double newlines
+        full_content = "\n\n".join(parts).strip()
         
         # Calculate word count
         word_count = len(full_content.split())
