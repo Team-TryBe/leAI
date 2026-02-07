@@ -676,3 +676,36 @@ async def get_extracted_job(
         message="Job details retrieved successfully",
         data=ExtractedJobDataResponse.model_validate(job)
     )
+
+
+@router.delete("/extracted/{job_id}", response_model=ApiResponse[dict])
+async def delete_extracted_job(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a saved job extraction (user must own the job)."""
+    stmt = (
+        select(ExtractedJobData)
+        .where(
+            (ExtractedJobData.id == job_id) &
+            (ExtractedJobData.user_id == current_user.id)
+        )
+    )
+    result = await db.execute(stmt)
+    job = result.scalar_one_or_none()
+    
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found or you don't have access to this job"
+        )
+    
+    await db.delete(job)
+    await db.commit()
+    
+    return ApiResponse(
+        success=True,
+        message="Job deleted successfully",
+        data={"deleted_id": job_id}
+    )

@@ -21,7 +21,10 @@ import {
   AlertCircle,
   X,
   Save,
-  Zap
+  Zap,
+  Trash2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { getAuthToken } from '@/lib/auth'
 
@@ -58,6 +61,9 @@ export default function JobExtractorPage() {
   const [loadingSavedJobs, setLoadingSavedJobs] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'extract' | 'saved'>('extract')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [deletingJobId, setDeletingJobId] = useState<number | null>(null)
+  const jobsPerPage = 5
 
   // Form inputs
   const [url, setUrl] = useState('')
@@ -166,6 +172,7 @@ export default function JobExtractorPage() {
           console.log('First job sample:', result.data[0])
         }
         setSavedJobs(result.data || [])
+        setCurrentPage(1) // Reset to first page when fetching new data
       }
     } catch (err) {
       console.error('Failed to fetch saved jobs:', err)
@@ -179,6 +186,39 @@ export default function JobExtractorPage() {
       fetchSavedJobs(searchQuery)
     } else {
       fetchSavedJobs()
+    }
+  }
+
+  const handleDeleteJob = async (jobId: number) => {
+    if (!confirm('Are you sure you want to delete this saved job?')) return
+
+    setDeletingJobId(jobId)
+    try {
+      const token = getAuthToken()
+      if (!token) return
+
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/job-extractor/extracted/${jobId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        setSavedJobs(savedJobs.filter(job => resolveJobId(job) !== jobId))
+        // If current page becomes empty, go to previous page
+        const totalPages = Math.ceil((savedJobs.length - 1) / jobsPerPage)
+        if (currentPage > totalPages && currentPage > 1) {
+          setCurrentPage(currentPage - 1)
+        }
+      } else {
+        alert('Failed to delete job')
+      }
+    } catch (err) {
+      console.error('Failed to delete job:', err)
+      alert('Failed to delete job')
+    } finally {
+      setDeletingJobId(null)
     }
   }
 
@@ -828,31 +868,50 @@ export default function JobExtractorPage() {
 
             {/* Saved Jobs List */}
             {!loadingSavedJobs && savedJobs.length > 0 && (
-              <div className="space-y-3">
-                {savedJobs.map((job, index) => {
-                  const jobId = resolveJobId(job)
-                  return (
-                    <div key={jobId ?? `job-${index}`} className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition duration-300 pointer-events-none"></div>
-                    <div className="relative card-dark p-5 rounded-xl space-y-4">
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-2 flex-1">
-                          <h3 className="font-semibold text-brand-text text-lg">{job.job_title}</h3>
-                          <p className="text-sm text-brand-text-muted flex items-center gap-2">
-                            <Building2 size={14} />
-                            {job.company_name}
-                          </p>
-                          {job.location && (
+              <>
+                <div className="space-y-3">
+                  {savedJobs
+                    .slice((currentPage - 1) * jobsPerPage, currentPage * jobsPerPage)
+                    .map((job, index) => {
+                    const jobId = resolveJobId(job)
+                    const isDeleting = deletingJobId === jobId
+                    return (
+                      <div key={jobId ?? `job-${index}`} className="relative group">
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition duration-300 pointer-events-none"></div>
+                      <div className={`relative card-dark p-5 rounded-xl space-y-4 ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-2 flex-1">
+                            <h3 className="font-semibold text-brand-text text-lg">{job.job_title}</h3>
                             <p className="text-sm text-brand-text-muted flex items-center gap-2">
-                              <MapPin size={14} />
-                              {job.location}
+                              <Building2 size={14} />
+                              {job.company_name}
                             </p>
-                          )}
+                            {job.location && (
+                              <p className="text-sm text-brand-text-muted flex items-center gap-2">
+                                <MapPin size={14} />
+                                {job.location}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-xs text-brand-text-muted">
+                              {jobId ? `ID: ${jobId}` : 'Unsaved'}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => jobId && handleDeleteJob(jobId)}
+                              disabled={isDeleting}
+                              className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition border border-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete job"
+                            >
+                              {isDeleting ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={14} />
+                              )}
+                            </button>
+                          </div>
                         </div>
-                        <div className="text-xs text-brand-text-muted">
-                          {jobId ? `ID: ${jobId}` : 'Unsaved'}
-                        </div>
-                      </div>
 
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {job.job_level && (
@@ -937,7 +996,50 @@ export default function JobExtractorPage() {
                   </div>
                   )
                 })}
-              </div>
+                </div>
+
+                {/* Pagination Controls */}
+                {savedJobs.length > jobsPerPage && (
+                  <div className="flex items-center justify-between pt-4 border-t border-brand-dark-border">
+                    <div className="text-xs text-brand-text-muted">
+                      Showing {(currentPage - 1) * jobsPerPage + 1} - {Math.min(currentPage * jobsPerPage, savedJobs.length)} of {savedJobs.length} jobs
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg bg-brand-dark-border hover:bg-indigo-500/10 text-brand-text disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1 text-xs font-medium"
+                      >
+                        <ChevronLeft size={14} />
+                        Previous
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.ceil(savedJobs.length / jobsPerPage) }, (_, i) => i + 1).map((page) => (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={`w-8 h-8 rounded-lg text-xs font-medium transition ${
+                              currentPage === page
+                                ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                                : 'bg-brand-dark-border hover:bg-indigo-500/10 text-brand-text-muted'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setCurrentPage(Math.min(Math.ceil(savedJobs.length / jobsPerPage), currentPage + 1))}
+                        disabled={currentPage === Math.ceil(savedJobs.length / jobsPerPage)}
+                        className="p-2 rounded-lg bg-brand-dark-border hover:bg-indigo-500/10 text-brand-text disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1 text-xs font-medium"
+                      >
+                        Next
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Empty State */}

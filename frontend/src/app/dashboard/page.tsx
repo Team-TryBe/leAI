@@ -123,11 +123,11 @@ export default function DashboardPage() {
                 </p>
               </div>
               <Link
-                href="/dashboard/applications/new"
+                href="/dashboard/job-extractor"
                 className="flex items-center gap-2 rounded-lg bg-white/20 backdrop-blur-sm px-4 py-2 text-sm font-semibold hover:bg-white/30 transition whitespace-nowrap"
               >
-                <Briefcase size={16} />
-                New App
+                <Sparkles size={16} />
+                Extract Job
               </Link>
             </div>
           </div>
@@ -257,16 +257,16 @@ export default function DashboardPage() {
             <h2 className="text-sm font-semibold text-brand-text">Quick Actions</h2>
             <div className="grid grid-cols-2 gap-2">
               <Link
-                href="/dashboard/applications/new"
+                href="/dashboard/job-extractor"
                 className="group p-3 rounded-lg bg-brand-primary/10 hover:bg-brand-primary/20 border border-brand-primary/30 transition"
               >
                 <div className="flex items-center gap-2 mb-1">
                   <div className="w-6 h-6 rounded bg-brand-primary/20 flex items-center justify-center text-brand-primary">
-                    <Briefcase size={14} />
+                    <Sparkles size={14} />
                   </div>
-                  <h3 className="font-medium text-xs text-brand-text">New App</h3>
+                  <h3 className="font-medium text-xs text-brand-text">Extract Job</h3>
                 </div>
-                <p className="text-xs text-brand-text-muted">Submit job URL</p>
+                <p className="text-xs text-brand-text-muted">Extract & save jobs</p>
               </Link>
 
               <Link

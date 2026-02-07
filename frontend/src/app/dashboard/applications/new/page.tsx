@@ -86,7 +86,8 @@ export default function NewApplicationPage() {
       fetchMatchScore();
     } else {
       console.log('Conditions not met:', { jobId, extracted });
-      setLoading(false);
+      // Redirect to job extractor if no job_id or extracted params
+      router.push('/dashboard/job-extractor');
     }
   }, [jobId, extracted]);
 
