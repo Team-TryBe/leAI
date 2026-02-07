@@ -141,6 +141,7 @@ class ExtractedJobData(Base):
     __tablename__ = "extracted_job_data"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     job_url = Column(String(500), nullable=False)
     
     # Core job information (required)

@@ -511,6 +511,7 @@ async def extract_job(
         
         # Save to database
         job_data = ExtractedJobData(
+            user_id=current_user.id,
             job_url=original_url or "manual_input",
             company_name=extracted_data.get("company_name"),
             job_title=extracted_data.get("job_title"),
@@ -590,17 +591,11 @@ async def get_recent_extractions(
     db: AsyncSession = Depends(get_db),
 ):
     """Get recent job extractions for the current user."""
-    # Get job extractions that the user has created applications from or viewed
-    # Since extracted_job_data doesn't have user_id, we get them through job_applications
+    # Get recent job extractions where user_id matches current user
     stmt = (
         select(ExtractedJobData)
-        .join(JobApplication, ExtractedJobData.id == JobApplication.extracted_data_id, isouter=True)
-        .where(
-            (JobApplication.user_id == current_user.id) |
-            (JobApplication.extracted_data_id == ExtractedJobData.id)
-        )
+        .where(ExtractedJobData.user_id == current_user.id)
         .order_by(ExtractedJobData.created_at.desc())
-        .distinct()
         .limit(limit)
     )
     result = await db.execute(stmt)
@@ -624,8 +619,7 @@ async def search_extractions(
     """Search and filter saved job extractions."""
     stmt = (
         select(ExtractedJobData)
-        .join(JobApplication, ExtractedJobData.id == JobApplication.extracted_data_id, isouter=True)
-        .where(JobApplication.user_id == current_user.id)
+        .where(ExtractedJobData.user_id == current_user.id)
         .order_by(ExtractedJobData.created_at.desc())
     )
     
