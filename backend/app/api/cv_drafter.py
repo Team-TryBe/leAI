@@ -379,6 +379,27 @@ async def draft_cv(
         total_text = json.dumps(cv_data)
         word_count = len(total_text.split())
         
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Failed to draft CV: {error_msg}")
+        
+        # Check for quota/rate limit errors
+        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="AI service quota exceeded. Please try again later or contact support to upgrade your plan."
+            )
+        elif "401" in error_msg or "UNAUTHENTICATED" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="AI service authentication failed. Please contact support."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to draft CV: {error_msg}"
+            )
+        
         # Estimate page count (rough: 400-500 words per page)
         page_count = max(1, (word_count // 450) + (1 if word_count % 450 > 0 else 0))
         

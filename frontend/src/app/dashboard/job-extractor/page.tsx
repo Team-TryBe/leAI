@@ -29,6 +29,8 @@ type ExtractionMode = 'url' | 'image' | 'text'
 
 type ExtractedJob = {
   id?: number
+  job_id?: number
+  extracted_job_id?: number
   job_title: string
   company_name: string
   location?: string
@@ -67,6 +69,8 @@ export default function JobExtractorPage() {
     checkProfileCompleteness()
     fetchSavedJobs()
   }, [])
+
+  const resolveJobId = (job: ExtractedJob) => job.id ?? job.job_id ?? job.extracted_job_id
 
   const checkProfileCompleteness = async () => {
     try {
@@ -275,9 +279,14 @@ export default function JobExtractorPage() {
   }
 
   const handleUseForApplication = () => {
-    if (!extractedData?.id) return
+    if (!extractedData) return
+    const jobId = resolveJobId(extractedData)
+    if (!jobId) {
+      alert('Error: Job ID is missing. Please extract again or refresh and try.')
+      return
+    }
     // Navigate to create a new application with this extracted job data
-    router.push(`/dashboard/applications/new?job_id=${extractedData.id}`)
+    router.push(`/dashboard/applications/new?job_id=${jobId}&extracted=true`)
   }
 
   const resetForm = () => {
@@ -746,8 +755,8 @@ export default function JobExtractorPage() {
                     onClick={handleUseForApplication}
                     className="py-2.5 px-4 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center justify-center gap-2"
                   >
-                    <FileText size={16} />
-                    <span>Use for Application</span>
+                    <Zap size={16} />
+                    <span>Personalize CV</span>
                   </button>
                 </div>
                 <button
@@ -820,9 +829,11 @@ export default function JobExtractorPage() {
             {/* Saved Jobs List */}
             {!loadingSavedJobs && savedJobs.length > 0 && (
               <div className="space-y-3">
-                {savedJobs.map((job) => (
-                  <div key={job.id} className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                {savedJobs.map((job, index) => {
+                  const jobId = resolveJobId(job)
+                  return (
+                    <div key={jobId ?? `job-${index}`} className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition duration-300 pointer-events-none"></div>
                     <div className="relative card-dark p-5 rounded-xl space-y-4">
                       <div className="flex items-start justify-between">
                         <div className="space-y-2 flex-1">
@@ -839,7 +850,7 @@ export default function JobExtractorPage() {
                           )}
                         </div>
                         <div className="text-xs text-brand-text-muted">
-                          {job.id ? `ID: ${job.id}` : 'Unsaved'}
+                          {jobId ? `ID: ${jobId}` : 'Unsaved'}
                         </div>
                       </div>
 
@@ -888,25 +899,33 @@ export default function JobExtractorPage() {
 
                       <div className="flex gap-2 pt-3 border-t border-brand-dark-border">
                         <button
-                          onClick={() => router.push(`/dashboard/saved-jobs/${job.id}`)}
+                          type="button"
+                          onClick={() => {
+                            if (!jobId) {
+                              alert('Error: Job ID is missing. Please refresh and try again.')
+                              return
+                            }
+                            router.push(`/dashboard/saved-jobs/${jobId}`)
+                          }}
                           className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-brand-primary to-brand-accent text-white text-xs font-medium hover:shadow-lg transition flex items-center justify-center gap-1.5"
                         >
                           <FileText size={14} />
                           View Details
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
-                            console.log('Full job object:', job);
-                            console.log('Job ID:', job.id);
-                            if (!job.id) {
-                              console.error('Error: job.id is undefined');
-                              alert('Error: Job ID is missing. Please refresh and try again.');
-                              return;
+                            console.log('Full job object:', job)
+                            console.log('Resolved Job ID:', jobId)
+                            if (!jobId) {
+                              console.error('Error: jobId is undefined')
+                              alert('Error: Job ID is missing. Please refresh and try again.')
+                              return
                             }
-                            console.log('Starting CV personalization for job:', job.id);
-                            const url = `/dashboard/applications/new?job_id=${job.id}&extracted=true`;
-                            console.log('Navigating to:', url);
-                            router.push(url);
+                            console.log('Starting CV personalization for job:', jobId)
+                            const url = `/dashboard/applications/new?job_id=${jobId}&extracted=true`
+                            console.log('Navigating to:', url)
+                            router.push(url)
                           }}
                           className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-medium hover:shadow-lg transition flex items-center justify-center gap-1.5"
                         >
@@ -916,7 +935,8 @@ export default function JobExtractorPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
 

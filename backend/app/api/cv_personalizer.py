@@ -397,8 +397,17 @@ async def personalize_section(
             raise ValueError("No JSON found in response")
             
     except Exception as e:
-        print(f"❌ Personalization error for {section_name}: {e}")
-        # Return original content if AI fails
+        error_msg = str(e)
+        print(f"❌ Personalization error for {section_name}: {error_msg}")
+        
+        # Check for quota errors and re-raise
+        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="AI service quota exceeded. Please try again later or contact support to upgrade your plan."
+            )
+        
+        # Return original content if AI fails for other reasons
         return PersonalizedSection(
             section_name=section_name,
             original_content=current_content,

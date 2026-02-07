@@ -144,7 +144,11 @@ class ApiClient {
   }
 
   async personalizeCv(jobId: number | string) {
-    return this.client.post('/cv-personalizer/personalize', { job_id: jobId })
+    return this.client.post(
+      '/cv-personalizer/personalize',
+      { job_id: jobId },
+      { timeout: 120000 }
+    )
   }
 }
 

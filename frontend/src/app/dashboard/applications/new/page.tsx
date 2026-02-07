@@ -115,8 +115,13 @@ export default function NewApplicationPage() {
         sections[key] = (section as PersonalizedSection).personalized_content;
       });
       setEditedSections(sections);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to personalize CV");
+    } catch (err: any) {
+      // Check for quota errors
+      if (err?.response?.status === 429 || err?.message?.includes('quota') || err?.message?.includes('RESOURCE_EXHAUSTED')) {
+        setError("AI service quota exceeded. The system has reached its daily API limit. Please try again in a few hours or contact support.");
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to personalize CV");
+      }
     } finally {
       setPersonalizing(false);
     }
@@ -341,13 +346,26 @@ export default function NewApplicationPage() {
                 <p className="text-sm font-semibold text-brand-text">Review Your Sections</p>
                 <p className="text-xs text-brand-text-muted mt-0.5">Edit or accept AI-optimized content below</p>
               </div>
-              <button
-                onClick={acceptAllChanges}
-                className="px-4 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg text-sm font-medium transition border border-green-500/30 flex items-center gap-2"
-              >
-                <Check size={16} />
-                Accept All
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (!jobId) return
+                    router.push(`/dashboard/applications/preview?job_id=${jobId}`)
+                  }}
+                  disabled={!jobId}
+                  className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg text-sm font-medium transition border border-indigo-500/30 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Eye size={16} />
+                  Preview & Edit CV
+                </button>
+                <button
+                  onClick={acceptAllChanges}
+                  className="px-4 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg text-sm font-medium transition border border-green-500/30 flex items-center gap-2"
+                >
+                  <Check size={16} />
+                  Accept All
+                </button>
+              </div>
             </div>
 
             {/* Personalized Sections */}
