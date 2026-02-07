@@ -137,6 +137,15 @@ class ApiClient {
   async updateMasterProfile(data: Record<string, any>) {
     return this.client.put('/master-profile', data)
   }
+
+  // CV Personalizer endpoints
+  async getMatchScore(jobId: number | string) {
+    return this.client.get(`/cv-personalizer/match-score/${jobId}`)
+  }
+
+  async personalizeCv(jobId: number | string) {
+    return this.client.post('/cv-personalizer/personalize', { job_id: jobId })
+  }
 }
 
 export const apiClient = new ApiClient()

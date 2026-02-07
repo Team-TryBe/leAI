@@ -17,9 +17,12 @@ import {
   RotateCcw,
   Check,
   Target,
-  Lightbulb
+  Lightbulb,
+  Sparkles,
+  Brain
 } from "lucide-react";
-import { getAuthToken } from "@/lib/auth";
+import { apiClient } from "@/lib/api";
+import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
 
 // Disable static prerendering since this page uses dynamic features
 export const dynamic = "force-dynamic";
@@ -78,31 +81,19 @@ export default function NewApplicationPage() {
 
   // Fetch match score on page load
   useEffect(() => {
+    console.log('SearchParams loaded:', { jobId, extracted, raw: searchParams.toString() });
     if (jobId && extracted) {
       fetchMatchScore();
     } else {
+      console.log('Conditions not met:', { jobId, extracted });
       setLoading(false);
     }
   }, [jobId, extracted]);
 
   const fetchMatchScore = async () => {
     try {
-      const token = getAuthToken();
-      if (!token) {
-        setError("Authentication required. Please log in.");
-        setLoading(false);
-        return;
-      }
-      const response = await fetch(`http://localhost:8000/api/v1/cv-personalizer/match-score/${jobId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error("Failed to fetch match score");
-
-      const data = await response.json();
-      setMatchScore(data.data);
+      const response = await apiClient.getMatchScore(jobId!);
+      setMatchScore(response.data.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load match score");
     } finally {
@@ -115,29 +106,12 @@ export default function NewApplicationPage() {
     setError(null);
 
     try {
-      const token = getAuthToken();
-      if (!token) {
-        setError("Authentication required. Please log in.");
-        setPersonalizing(false);
-        return;
-      }
-      const response = await fetch(`http://localhost:8000/api/v1/cv-personalizer/personalize`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ job_id: parseInt(jobId!) }),
-      });
-
-      if (!response.ok) throw new Error("Failed to personalize CV");
-
-      const data = await response.json();
-      setPersonalizationData(data.data);
+      const response = await apiClient.personalizeCv(parseInt(jobId!));
+      setPersonalizationData(response.data.data);
 
       // Initialize edited sections with personalized content
       const sections: Record<string, string> = {};
-      Object.entries(data.data.personalized_sections).forEach(([key, section]) => {
+      Object.entries(response.data.data.personalized_sections).forEach(([key, section]) => {
         sections[key] = (section as PersonalizedSection).personalized_content;
       });
       setEditedSections(sections);
@@ -181,200 +155,205 @@ export default function NewApplicationPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-dark via-brand-dark-card to-brand-dark">
-        <div className="text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="relative w-16 h-16">
-              <div className="absolute inset-0 bg-gradient-to-r from-brand-primary to-brand-accent rounded-full animate-spin" style={{animationDuration: '3s'}}></div>
-              <div className="absolute inset-2 bg-brand-dark rounded-full flex items-center justify-center">
-                <Zap className="w-6 h-6 text-brand-primary" />
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center space-y-4">
+            <div className="relative w-16 h-16 mx-auto">
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full animate-spin" style={{animationDuration: '2s'}}></div>
+              <div className="absolute inset-2 bg-brand-dark-card rounded-full flex items-center justify-center">
+                <Brain className="w-7 h-7 text-indigo-400 animate-pulse" />
               </div>
             </div>
-          </div>
-          <div>
-            <h2 className="text-xl font-display font-bold text-brand-text">Analyzing Your Match</h2>
-            <p className="text-brand-text-muted mt-2">Personalizing your CV with AI intelligence...</p>
+            <div>
+              <h2 className="text-lg font-semibold text-brand-text">Analyzing Your Profile</h2>
+              <p className="text-sm text-brand-text-muted mt-1">Calculating match score...</p>
+            </div>
           </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (!jobId || !extracted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-dark via-brand-dark-card to-brand-dark">
-        <div className="text-center space-y-4">
-          <AlertCircle className="w-16 h-16 text-brand-error mx-auto" />
-          <div>
-            <h2 className="text-xl font-display font-bold text-brand-text">No Job Found</h2>
-            <p className="text-brand-text-muted mt-2">Please extract a job posting first</p>
+      <DashboardLayout>
+        <div className="max-w-2xl mx-auto py-20">
+          <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-red-500/10 via-rose-500/5 to-red-500/10 border border-red-500/30 p-8">
+            <div className="text-center space-y-4">
+              <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+              <div>
+                <h2 className="text-xl font-semibold text-red-400">No Job Found</h2>
+                <p className="text-sm text-red-300/80 mt-2">Please extract a job posting first</p>
+              </div>
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="mt-4 px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg hover:shadow-lg transition-all text-sm font-medium"
+              >
+                Go to Dashboard
+              </button>
+            </div>
           </div>
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="mt-4 px-6 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-hover transition-colors"
-          >
-            Go to Dashboard
-          </button>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-dark via-[#1a1a3e] to-brand-dark-card">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-50 bg-brand-dark/80 backdrop-blur-xl border-b border-brand-dark-border">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => router.back()}
-                className="p-2 hover:bg-brand-dark-border rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5 text-brand-text" />
-              </button>
-              <div>
-                <h1 className="text-2xl font-display font-bold text-brand-text">CV Optimizer</h1>
-                <p className="text-xs text-brand-text-muted">AI-Powered Application Assistant</p>
-              </div>
+    <DashboardLayout>
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.back()}
+              className="p-2 hover:bg-brand-dark-border rounded-lg transition text-brand-text"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-brand-text flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-indigo-400" />
+                CV Optimizer
+              </h1>
+              <p className="text-xs text-brand-text-muted mt-0.5">AI-powered job application assistant</p>
             </div>
-            {personalizationData && (
-              <div className="flex gap-3">
-                <button
-                  onClick={handleDownload}
-                  className="px-4 py-2 rounded-lg border border-brand-dark-border hover:bg-brand-dark-border text-brand-text text-sm font-medium transition-colors flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  <span className="hidden sm:inline">PDF</span>
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-brand-primary to-brand-accent hover:shadow-lg hover:shadow-brand-primary/50 text-white text-sm font-medium transition-all flex items-center gap-2"
-                >
-                  <Send className="w-4 h-4" />
-                  <span className="hidden sm:inline">Submit</span>
-                </button>
-              </div>
-            )}
           </div>
-        </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+          {personalizationData && (
+            <div className="flex gap-2">
+              <button
+                onClick={handleDownload}
+                className="px-4 py-2 rounded-lg border border-brand-dark-border hover:bg-brand-dark-border text-brand-text text-sm font-medium transition flex items-center gap-2"
+              >
+                <Download size={16} />
+                PDF
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 hover:shadow-lg text-white text-sm font-medium transition flex items-center gap-2"
+              >
+                <Send size={16} />
+                Submit
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Error Alert */}
         {error && (
-          <div className="bg-gradient-to-r from-brand-error/20 to-brand-error/10 border border-brand-error/50 rounded-xl p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-brand-error mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-brand-error font-semibold text-sm">Error Loading Profile</p>
-              <p className="text-brand-error/80 text-sm mt-1">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Match Score Section - Featured Card */}
-        {matchScore && (
-          <div className="mb-2">
-            <MatchScoreMeter matchScore={matchScore} />
-          </div>
-        )}
-
-        {/* Personalize CTA - When not personalized */}
-        {!personalizationData && matchScore && (
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-primary/20 via-brand-accent/20 to-brand-primary/20 border border-brand-primary/30 p-8">
-            <div className="absolute inset-0 bg-gradient-to-r from-brand-primary/0 via-brand-accent/5 to-brand-primary/0"></div>
-            <div className="relative z-10 text-center space-y-4">
-              <Lightbulb className="w-12 h-12 text-brand-accent mx-auto" />
+          <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-red-500/10 to-rose-500/10 border border-red-500/30 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="text-2xl font-display font-bold text-brand-text">Ready to Personalize?</h3>
-                <p className="text-brand-text-muted text-sm mt-1">Our AI will rewrite your CV to match this job perfectly</p>
+                <p className="text-red-400 font-semibold text-sm">Error</p>
+                <p className="text-red-300/80 text-sm mt-0.5">{error}</p>
               </div>
-              <button
-                onClick={handlePersonalize}
-                disabled={personalizing}
-                className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-brand-primary to-brand-accent hover:shadow-lg hover:shadow-brand-primary/30 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {personalizing ? (
-                  <>
-                    <RefreshCw className="w-5 h-5 animate-spin" />
-                    Personalizing...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-5 h-5" />
-                    AI Personalize My CV
-                  </>
-                )}
-              </button>
             </div>
+          </div>
+        )}
+
+        {/* Match Score Card */}
+        {matchScore && (
+          <MatchScoreCard matchScore={matchScore} />
+        )}
+
+        {/* Personalize CTA */}
+        {!personalizationData && matchScore && (
+          <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-purple-500/10 border border-indigo-500/20 p-8 text-center">
+            <Sparkles className="w-10 h-10 text-indigo-400 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-brand-text mb-2">Ready to Optimize?</h3>
+            <p className="text-sm text-brand-text-muted mb-6">AI will tailor your CV to match this job perfectly</p>
+            <button
+              onClick={handlePersonalize}
+              disabled={personalizing}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 hover:shadow-lg text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {personalizing ? (
+                <>
+                  <RefreshCw size={18} className="animate-spin" />
+                  Optimizing...
+                </>
+              ) : (
+                <>
+                  <Zap size={18} />
+                  Start AI Optimization
+                </>
+              )}
+            </button>
           </div>
         )}
 
         {/* Personalized Content */}
         {personalizationData && (
           <>
-            {/* Quick Stats Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard 
-                icon={Target} 
-                label="Company Tone" 
+                icon={Brain} 
+                label="Tone" 
                 value={personalizationData.company_tone.charAt(0).toUpperCase() + personalizationData.company_tone.slice(1)}
-                color="brand-primary"
+                color="purple"
               />
               <StatCard 
                 icon={Check} 
-                label="Direct Matches" 
+                label="Matches" 
                 value={personalizationData.gap_analysis.direct_matches.length.toString()}
-                color="brand-success"
+                color="green"
               />
               <StatCard 
                 icon={TrendingUp} 
                 label="Transferable" 
                 value={personalizationData.gap_analysis.transferable_matches.length.toString()}
-                color="brand-accent"
+                color="blue"
               />
               <StatCard 
-                icon={Zap} 
-                label="ATS Keywords" 
+                icon={Target} 
+                label="Keywords" 
                 value={personalizationData.ats_optimized_keywords.length.toString()}
-                color="brand-primary"
+                color="orange"
               />
             </div>
 
-            {/* Gap Analysis Section */}
-            <div>
-              <GapAnalysisDisplay gapAnalysis={personalizationData.gap_analysis} />
+            {/* Gap Analysis */}
+            <GapAnalysisCard gapAnalysis={personalizationData.gap_analysis} />
+
+            {/* ATS Keywords */}
+            <div className="card-dark p-4 rounded-lg">
+              <h3 className="text-sm font-semibold text-brand-text mb-3 flex items-center gap-2">
+                <Zap size={16} className="text-indigo-400" />
+                ATS-Optimized Keywords
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {personalizationData.ats_optimized_keywords.map((keyword, index) => (
+                  <span
+                    key={index}
+                    className="px-2.5 py-1 bg-indigo-500/10 text-indigo-400 rounded-md text-xs font-medium border border-indigo-500/20"
+                  >
+                    {keyword}
+                  </span>
+                ))}
+              </div>
             </div>
 
             {/* Action Bar */}
-            <div className="bg-gradient-to-r from-brand-dark-card to-brand-dark-card border border-brand-dark-border rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="card-dark p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-center sm:text-left">
-                <p className="text-brand-text text-sm font-semibold">All changes ready to review</p>
-                <p className="text-brand-text-muted text-xs mt-1">Accept or edit sections below, or preview the full CV</p>
+                <p className="text-sm font-semibold text-brand-text">Review Your Sections</p>
+                <p className="text-xs text-brand-text-muted mt-0.5">Edit or accept AI-optimized content below</p>
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => router.push(`/dashboard/applications/preview?job_id=${jobId}`)}
-                  className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-brand-accent to-[#a78bfa] text-white rounded-lg text-sm font-semibold transition-all hover:shadow-lg hover:shadow-brand-accent/20 flex items-center justify-center gap-2"
-                >
-                  <Eye className="w-4 h-4" />
-                  Preview & Edit CV
-                </button>
-                <button
-                  onClick={acceptAllChanges}
-                  className="w-full sm:w-auto px-6 py-2 bg-brand-success/20 hover:bg-brand-success/30 text-brand-success rounded-lg text-sm font-semibold transition-colors border border-brand-success/50 flex items-center justify-center gap-2"
-                >
-                  <Check className="w-4 h-4" />
-                  Accept All
-                </button>
-              </div>
+              <button
+                onClick={acceptAllChanges}
+                className="px-4 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg text-sm font-medium transition border border-green-500/30 flex items-center gap-2"
+              >
+                <Check size={16} />
+                Accept All
+              </button>
             </div>
 
             {/* Personalized Sections */}
             <div className="space-y-4">
-              <h2 className="text-xl font-display font-bold text-brand-text">Edit Your Sections</h2>
               {Object.entries(personalizationData.personalized_sections).map(([key, section]) => (
-                <PersonalizedSectionCard
+                <SectionCard
                   key={key}
                   sectionKey={key}
                   section={section}
@@ -384,28 +363,10 @@ export default function NewApplicationPage() {
                 />
               ))}
             </div>
-
-            {/* ATS Keywords Section */}
-            <div className="bg-gradient-to-br from-brand-dark-card to-brand-dark border border-brand-dark-border rounded-xl p-6">
-              <h3 className="text-lg font-display font-bold text-brand-text mb-4 flex items-center gap-2">
-                <Zap className="w-5 h-5 text-brand-accent" />
-                ATS-Optimized Keywords
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {personalizationData.ats_optimized_keywords.map((keyword, index) => (
-                  <span
-                    key={index}
-                    className="px-3 py-1 bg-brand-primary/20 text-brand-primary rounded-full text-sm font-medium border border-brand-primary/50 hover:bg-brand-primary/30 transition-colors"
-                  >
-                    {keyword}
-                  </span>
-                ))}
-              </div>
-            </div>
           </>
         )}
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
 
@@ -421,91 +382,56 @@ function StatCard({
   value: string; 
   color: string;
 }) {
-  const colorClasses: Record<string, string> = {
-    'brand-primary': 'bg-brand-primary/20 text-brand-primary border-brand-primary/50',
-    'brand-accent': 'bg-brand-accent/20 text-brand-accent border-brand-accent/50',
-    'brand-success': 'bg-brand-success/20 text-brand-success border-brand-success/50',
+  const colorClasses: Record<string, { bg: string; text: string; border: string }> = {
+    'purple': { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20' },
+    'green': { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/20' },
+    'blue': { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20' },
+    'orange': { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/20' },
   };
   
+  const colors = colorClasses[color] || colorClasses['purple'];
+  
   return (
-    <div className={`${colorClasses[color] || colorClasses['brand-primary']} border rounded-lg p-4 flex flex-col items-center gap-2`}>
-      <Icon className="w-5 h-5" />
-      <div className="text-center">
-        <p className="text-2xl font-display font-bold">{value}</p>
-        <p className="text-xs text-brand-text-muted mt-1">{label}</p>
-      </div>
+    <div className={`${colors.bg} ${colors.border} border rounded-lg p-3 text-center`}>
+      <Icon size={18} className={`${colors.text} mx-auto mb-2`} />
+      <p className={`text-lg font-bold ${colors.text}`}>{value}</p>
+      <p className="text-xs text-brand-text-muted mt-0.5">{label}</p>
     </div>
   );
 }
 
-// Match Score Meter Component
-function MatchScoreMeter({ matchScore }: { matchScore: MatchScoreBreakdown }) {
-  const getColorClasses = (band: string) => {
+// Match Score Card Component
+function MatchScoreCard({ matchScore }: { matchScore: MatchScoreBreakdown }) {
+  const getColors = (band: string) => {
     switch (band) {
-      case "red":
-        return {
-          bg: "bg-red-50",
-          border: "border-red-200",
-          text: "text-red-700",
-          ring: "stroke-red-600",
-          track: "stroke-red-100",
-        };
-      case "yellow":
-        return {
-          bg: "from-amber-500/20 to-amber-600/20",
-          border: "border-amber-500/50",
-          text: "text-amber-400",
-          ring: "stroke-amber-500",
-          track: "stroke-amber-500/20",
-          icon: "🟡",
-        };
       case "green":
-        return {
-          bg: "from-brand-success/20 to-emerald-500/20",
-          border: "border-brand-success/50",
-          text: "text-brand-success",
-          ring: "stroke-brand-success",
-          track: "stroke-brand-success/20",
-          icon: "✅",
-        };
+        return { bg: 'from-green-500/10 to-emerald-500/10', border: 'border-green-500/30', text: 'text-green-400', ring: 'stroke-green-500', track: 'stroke-green-500/20' };
+      case "yellow":
+        return { bg: 'from-amber-500/10 to-yellow-500/10', border: 'border-amber-500/30', text: 'text-amber-400', ring: 'stroke-amber-500', track: 'stroke-amber-500/20' };
       default:
-        return {
-          bg: "from-brand-primary/20 to-brand-accent/20",
-          border: "border-brand-primary/50",
-          text: "text-brand-primary",
-          ring: "stroke-brand-primary",
-          track: "stroke-brand-primary/20",
-          icon: "📊",
-        };
+        return { bg: 'from-red-500/10 to-rose-500/10', border: 'border-red-500/30', text: 'text-red-400', ring: 'stroke-red-500', track: 'stroke-red-500/20' };
     }
   };
 
-  const colors = getColorClasses(matchScore.color_band);
+  const colors = getColors(matchScore.color_band);
   const percentage = matchScore.total_score;
-  const circumference = 2 * Math.PI * 58; // radius = 58
+  const circumference = 2 * Math.PI * 45;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
   return (
-    <div className={`bg-gradient-to-br ${colors.bg} border ${colors.border} rounded-2xl p-8 backdrop-blur-sm`}>
-      <div className="grid md:grid-cols-2 gap-8">
+    <div className={`bg-gradient-to-br ${colors.bg} border ${colors.border} rounded-xl p-6`}>
+      <div className="grid md:grid-cols-[200px_1fr] gap-6">
         {/* Circular Progress */}
         <div className="flex flex-col items-center justify-center">
-          <div className="relative w-48 h-48 mb-4">
-            <svg className="w-full h-full transform -rotate-90 drop-shadow-lg">
+          <div className="relative w-36 h-36 mb-3">
+            <svg className="w-full h-full transform -rotate-90">
+              <circle cx="72" cy="72" r="45" className={colors.track} strokeWidth="8" fill="none" />
               <circle
-                cx="96"
-                cy="96"
-                r="58"
-                className={colors.track}
-                strokeWidth="12"
-                fill="none"
-              />
-              <circle
-                cx="96"
-                cy="96"
-                r="58"
+                cx="72"
+                cy="72"
+                r="45"
                 className={`${colors.ring} transition-all duration-1000 ease-out`}
-                strokeWidth="12"
+                strokeWidth="8"
                 fill="none"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
@@ -513,42 +439,38 @@ function MatchScoreMeter({ matchScore }: { matchScore: MatchScoreBreakdown }) {
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className={`text-5xl font-display font-bold ${colors.text}`}>
-                {percentage.toFixed(0)}
-              </span>
-              <span className={`text-xs font-semibold ${colors.text} opacity-80 mt-1`}>% MATCH</span>
+              <span className={`text-4xl font-bold ${colors.text}`}>{percentage.toFixed(0)}</span>
+              <span className={`text-xs font-semibold ${colors.text} opacity-80`}>% MATCH</span>
             </div>
           </div>
-          <div className={`px-4 py-2 rounded-lg bg-gradient-to-r ${colors.bg} border ${colors.border}`}>
-            <p className={`text-sm font-semibold ${colors.text} text-center`}>
-              {matchScore.color_band === "green" && "✨ Excellent Match - Ready to Submit!"}
-              {matchScore.color_band === "yellow" && "⚡ Good Match - Can Be Enhanced"}
-              {matchScore.color_band === "red" && "📈 Needs Improvement"}
+          <div className={`px-3 py-1.5 rounded-lg ${colors.bg} border ${colors.border}`}>
+            <p className={`text-xs font-semibold ${colors.text}`}>
+              {matchScore.color_band === "green" && "✨ Excellent"}
+              {matchScore.color_band === "yellow" && "⚡ Good"}
+              {matchScore.color_band === "red" && "📈 Needs Work"}
             </p>
           </div>
         </div>
 
         {/* Score Breakdown */}
-        <div className="space-y-5">
-          <h3 className="text-lg font-display font-bold text-brand-text">Score Components</h3>
-
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-brand-text mb-3">Score Breakdown</h3>
           <ScoreBar label="Keywords" score={matchScore.keyword_match} maxScore={40} />
           <ScoreBar label="Experience" score={matchScore.experience_match} maxScore={30} />
           <ScoreBar label="Skills" score={matchScore.skills_match} maxScore={20} />
           <ScoreBar label="Education" score={matchScore.education_match} maxScore={10} />
 
-          {/* Recommendations */}
           {matchScore.recommendations.length > 0 && (
-            <div className="mt-6 pt-6 border-t border-brand-dark-border">
-              <h4 className="text-sm font-semibold text-brand-text mb-3 flex items-center gap-2">
-                <Lightbulb className="w-4 h-4 text-brand-accent" />
-                Tips to Improve
+            <div className="mt-4 pt-4 border-t border-brand-dark-border">
+              <h4 className="text-xs font-semibold text-brand-text mb-2 flex items-center gap-1.5">
+                <Lightbulb size={14} className="text-indigo-400" />
+                Tips
               </h4>
-              <ul className="space-y-2">
-                {matchScore.recommendations.map((rec, index) => (
+              <ul className="space-y-1.5">
+                {matchScore.recommendations.slice(0, 3).map((rec, index) => (
                   <li key={index} className="flex items-start gap-2">
-                    <span className="text-brand-accent mt-0.5">→</span>
-                    <span className="text-sm text-brand-text-muted">{rec}</span>
+                    <span className="text-indigo-400 text-xs mt-0.5">→</span>
+                    <span className="text-xs text-brand-text-muted">{rec}</span>
                   </li>
                 ))}
               </ul>
@@ -565,16 +487,14 @@ function ScoreBar({ label, score, maxScore }: { label: string; score: number; ma
   const percentage = (score / maxScore) * 100;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <div className="flex justify-between items-center">
-        <span className="text-sm font-semibold text-brand-text">{label}</span>
-        <span className="text-sm text-brand-accent font-bold">
-          {score.toFixed(0)}/{maxScore}
-        </span>
+        <span className="text-xs font-medium text-brand-text">{label}</span>
+        <span className="text-xs text-indigo-400 font-semibold">{score.toFixed(0)}/{maxScore}</span>
       </div>
-      <div className="w-full bg-brand-dark-border/50 rounded-full h-2 overflow-hidden">
+      <div className="w-full bg-brand-dark-border/50 rounded-full h-1.5 overflow-hidden">
         <div
-          className="bg-gradient-to-r from-brand-primary to-brand-accent h-2 rounded-full transition-all duration-700 ease-out shadow-lg shadow-brand-primary/50"
+          className="bg-gradient-to-r from-indigo-500 to-violet-500 h-1.5 rounded-full transition-all duration-700 ease-out"
           style={{ width: `${percentage}%` }}
         />
       </div>
@@ -582,83 +502,87 @@ function ScoreBar({ label, score, maxScore }: { label: string; score: number; ma
   );
 }
 
-// Gap Analysis Display Component
-function GapAnalysisDisplay({ gapAnalysis }: { gapAnalysis: GapAnalysis }) {
+// Gap Analysis Card Component
+function GapAnalysisCard({ gapAnalysis }: { gapAnalysis: GapAnalysis }) {
   return (
-    <div className="bg-gradient-to-br from-brand-dark-card to-brand-dark border border-brand-dark-border rounded-2xl p-6 space-y-6">
-      <h3 className="text-lg font-display font-bold text-brand-text flex items-center gap-2">
-        <Target className="w-5 h-5 text-brand-accent" />
-        Gap Analysis
+    <div className="card-dark p-5 rounded-lg space-y-4">
+      <h3 className="text-sm font-semibold text-brand-text flex items-center gap-2">
+        <Target size={16} className="text-indigo-400" />
+        Skills Analysis
       </h3>
 
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-3 gap-4">
         {/* Direct Matches */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle className="w-5 h-5 text-brand-success" />
-            <h4 className="font-semibold text-brand-text">Direct Matches</h4>
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <CheckCircle size={14} className="text-green-400" />
+            <h4 className="text-xs font-semibold text-green-400">Direct Matches</h4>
           </div>
           {gapAnalysis.direct_matches.length > 0 ? (
-            <ul className="space-y-2">
-              {gapAnalysis.direct_matches.map((skill, index) => (
-                <li key={index} className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-brand-success rounded-full" />
-                  <span className="text-sm text-brand-text">{skill}</span>
+            <ul className="space-y-1">
+              {gapAnalysis.direct_matches.slice(0, 5).map((skill, index) => (
+                <li key={index} className="flex items-center gap-1.5">
+                  <div className="w-1 h-1 bg-green-400 rounded-full" />
+                  <span className="text-xs text-brand-text">{skill}</span>
                 </li>
               ))}
+              {gapAnalysis.direct_matches.length > 5 && (
+                <li className="text-xs text-brand-text-muted italic ml-2.5">+{gapAnalysis.direct_matches.length - 5} more</li>
+              )}
             </ul>
           ) : (
-            <p className="text-sm text-brand-text-muted italic">No direct matches</p>
+            <p className="text-xs text-brand-text-muted italic">None found</p>
           )}
         </div>
 
-        {/* Transferable Matches */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 mb-3">
-            <TrendingUp className="w-5 h-5 text-brand-accent" />
-            <h4 className="font-semibold text-brand-text">Transferable</h4>
+        {/* Transferable */}
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <TrendingUp size={14} className="text-blue-400" />
+            <h4 className="text-xs font-semibold text-blue-400">Transferable</h4>
           </div>
           {gapAnalysis.transferable_matches.length > 0 ? (
-            <ul className="space-y-3">
-              {gapAnalysis.transferable_matches.map((match, index) => (
-                <li key={index} className="text-sm space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-brand-accent rounded-full" />
-                    <span className="font-semibold text-brand-text">{match.jd_skill}</span>
+            <ul className="space-y-1.5">
+              {gapAnalysis.transferable_matches.slice(0, 3).map((match, index) => (
+                <li key={index} className="text-xs space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1 h-1 bg-blue-400 rounded-full" />
+                    <span className="font-medium text-brand-text">{match.jd_skill}</span>
                   </div>
-                  <p className="text-xs text-brand-text-muted ml-4">
-                    ✦ {match.user_skill}
-                  </p>
-                  <p className="text-xs text-brand-accent ml-4">
-                    → {match.suggestion}
-                  </p>
+                  <p className="text-xs text-brand-text-muted ml-2.5">→ {match.user_skill}</p>
                 </li>
               ))}
+              {gapAnalysis.transferable_matches.length > 3 && (
+                <li className="text-xs text-brand-text-muted italic ml-2.5">+{gapAnalysis.transferable_matches.length - 3} more</li>
+              )}
             </ul>
           ) : (
-            <p className="text-sm text-brand-text-muted italic">No matches identified</p>
+            <p className="text-xs text-brand-text-muted italic">None identified</p>
           )}
         </div>
 
         {/* Gaps */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 mb-3">
-            <XCircle className="w-5 h-5 text-red-500" />
-            <h4 className="font-semibold text-brand-text">Skills to Add</h4>
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <XCircle size={14} className="text-red-400" />
+            <h4 className="text-xs font-semibold text-red-400">Missing Skills</h4>
           </div>
           {gapAnalysis.gaps.length > 0 ? (
-            <ul className="space-y-2">
-              {gapAnalysis.gaps.map((gap, index) => (
-                <li key={index} className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full" />
-                  <span className="text-sm text-brand-text">{gap}</span>
+            <ul className="space-y-1">
+              {gapAnalysis.gaps.slice(0, 5).map((gap, index) => (
+                <li key={index} className="flex items-center gap-1.5">
+                  <div className="w-1 h-1 bg-red-400 rounded-full" />
+                  <span className="text-xs text-brand-text">{gap}</span>
                 </li>
               ))}
+              {gapAnalysis.gaps.length > 5 && (
+                <li className="text-xs text-brand-text-muted italic ml-2.5">+{gapAnalysis.gaps.length - 5} more</li>
+              )}
             </ul>
           ) : (
-            <p className="text-sm text-brand-success italic flex items-center gap-2">
-              <CheckCircle className="w-4 h-4" />
-              No major gaps!
+            <p className="text-xs text-green-400 italic flex items-center gap-1">
+              <CheckCircle size={12} />
+              No gaps!
             </p>
           )}
         </div>
@@ -666,18 +590,15 @@ function GapAnalysisDisplay({ gapAnalysis }: { gapAnalysis: GapAnalysis }) {
 
       {/* Priorities */}
       {gapAnalysis.priorities.length > 0 && (
-        <div className="mt-6 pt-6 border-t border-brand-dark-border">
-          <h4 className="text-sm font-semibold text-brand-text mb-3 flex items-center gap-2">
-            <Target className="w-4 h-4 text-brand-primary" />
-            Top Priority Skills from Job Description
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {gapAnalysis.priorities.map((priority, index) => (
+        <div className="pt-3 border-t border-brand-dark-border">
+          <h4 className="text-xs font-semibold text-brand-text mb-2">Priority Skills</h4>
+          <div className="flex flex-wrap gap-1.5">
+            {gapAnalysis.priorities.slice(0, 6).map((priority, index) => (
               <span
                 key={index}
-                className="px-3 py-1.5 bg-brand-primary/20 text-brand-primary rounded-lg text-sm font-medium border border-brand-primary/50 hover:bg-brand-primary/30 transition-colors"
+                className="px-2 py-0.5 bg-indigo-500/10 text-indigo-400 rounded text-xs font-medium border border-indigo-500/20"
               >
-                #{index + 1} {priority}
+                {priority}
               </span>
             ))}
           </div>
@@ -687,8 +608,8 @@ function GapAnalysisDisplay({ gapAnalysis }: { gapAnalysis: GapAnalysis }) {
   );
 }
 
-// Personalized Section Card Component
-function PersonalizedSectionCard({
+// Section Card Component
+function SectionCard({
   sectionKey,
   section,
   editedContent,
@@ -704,86 +625,62 @@ function PersonalizedSectionCard({
   const [isEditing, setIsEditing] = useState(false);
 
   return (
-    <div className="bg-brand-dark-card rounded-xl border border-brand-dark-border overflow-hidden hover:border-brand-primary/30 transition-all">
+    <div className="card-dark rounded-lg border border-brand-dark-border overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-brand-primary/20 to-brand-accent/20 px-6 py-4 border-b border-brand-dark-border">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-display font-bold text-brand-text">{section.section_name}</h3>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className="px-4 py-2 text-sm bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary rounded-lg transition-colors font-medium border border-brand-primary/50 flex items-center gap-2"
-            >
-              {isEditing ? (
-                <>
-                  <Eye className="w-4 h-4" />
-                  Preview
-                </>
-              ) : (
-                <>
-                  <Edit2 className="w-4 h-4" />
-                  Edit
-                </>
-              )}
-            </button>
-            <button
-              onClick={() => onRevert(sectionKey)}
-              className="px-4 py-2 text-sm bg-brand-dark-border hover:bg-brand-dark text-brand-text-muted hover:text-brand-text rounded-lg transition-colors flex items-center gap-2 font-medium"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Revert
-            </button>
-          </div>
+      <div className="bg-gradient-to-r from-indigo-500/10 to-violet-500/10 px-4 py-3 border-b border-brand-dark-border flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-brand-text">{section.section_name}</h3>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            className="px-3 py-1.5 text-xs bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-md transition border border-indigo-500/20 flex items-center gap-1.5"
+          >
+            {isEditing ? <Eye size={14} /> : <Edit2 size={14} />}
+            {isEditing ? "View" : "Edit"}
+          </button>
+          <button
+            onClick={() => onRevert(sectionKey)}
+            className="px-3 py-1.5 text-xs bg-brand-dark-border hover:bg-brand-dark text-brand-text-muted hover:text-brand-text rounded-md transition flex items-center gap-1.5"
+          >
+            <RotateCcw size={14} />
+            Revert
+          </button>
         </div>
       </div>
 
-      <div className="p-6 space-y-6">
-        {/* Side-by-Side Comparison */}
-        <div className="grid md:grid-cols-2 gap-6">
+      <div className="p-4 space-y-4">
+        {/* Content Comparison */}
+        <div className="grid md:grid-cols-2 gap-4">
           {/* Original */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-brand-dark-border rounded-md">
-                <Eye className="w-4 h-4 text-brand-text-muted" />
-              </div>
-              <h4 className="text-sm font-semibold text-brand-text-muted uppercase tracking-wide">Original Content</h4>
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 bg-brand-text-muted rounded-full" />
+              <h4 className="text-xs font-semibold text-brand-text-muted uppercase">Original</h4>
             </div>
-            <div className="bg-brand-dark/80 border border-brand-dark-border rounded-xl p-5 min-h-[200px]">
-              <p className="whitespace-pre-wrap text-base text-brand-text-muted leading-loose font-light">
+            <div className="bg-brand-dark/50 border border-brand-dark-border rounded-lg p-3 min-h-[120px]">
+              <p className="text-xs text-brand-text-muted leading-relaxed whitespace-pre-wrap">
                 {section.original_content}
               </p>
             </div>
           </div>
 
-          {/* Personalized/Edited */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              {isEditing ? (
-                <>
-                  <div className="p-1.5 bg-brand-primary/20 rounded-md">
-                    <Edit2 className="w-4 h-4 text-brand-primary" />
-                  </div>
-                  <h4 className="text-sm font-semibold text-brand-primary uppercase tracking-wide">Currently Editing</h4>
-                </>
-              ) : (
-                <>
-                  <div className="p-1.5 bg-brand-success/20 rounded-md">
-                    <CheckCircle className="w-4 h-4 text-brand-success" />
-                  </div>
-                  <h4 className="text-sm font-semibold text-brand-success uppercase tracking-wide">AI Personalized</h4>
-                </>
-              )}
+          {/* AI Optimized */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 bg-green-400 rounded-full" />
+              <h4 className="text-xs font-semibold text-green-400 uppercase">
+                {isEditing ? "Editing" : "AI Optimized"}
+              </h4>
             </div>
             {isEditing ? (
               <textarea
                 value={editedContent}
                 onChange={(e) => onUpdate(sectionKey, e.target.value)}
-                className="w-full min-h-[200px] p-5 border-2 border-brand-primary/50 bg-brand-dark-card rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary text-base text-brand-text placeholder-brand-text-muted resize-none leading-loose font-light transition-all"
-                placeholder="Edit your content here..."
+                className="w-full min-h-[120px] p-3 border border-indigo-500/30 bg-brand-dark-card rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-xs text-brand-text resize-none leading-relaxed transition"
+                placeholder="Edit content..."
               />
             ) : (
-              <div className="bg-gradient-to-br from-brand-primary/10 via-brand-accent/5 to-brand-success/10 border-2 border-brand-primary/30 rounded-xl p-5 min-h-[200px]">
-                <p className="whitespace-pre-wrap text-base text-brand-text leading-loose font-light">
+              <div className="bg-gradient-to-br from-green-500/5 to-emerald-500/5 border border-green-500/20 rounded-lg p-3 min-h-[120px]">
+                <p className="text-xs text-brand-text leading-relaxed whitespace-pre-wrap">
                   {editedContent}
                 </p>
               </div>
@@ -793,22 +690,16 @@ function PersonalizedSectionCard({
 
         {/* Improvements */}
         {section.improvements.length > 0 && (
-          <div className="bg-gradient-to-br from-brand-success/15 via-emerald-500/10 to-brand-success/5 rounded-xl p-5 border border-brand-success/40">
-            <h4 className="text-base font-bold text-brand-success mb-4 flex items-center gap-2">
-              <div className="p-1.5 bg-brand-success/20 rounded-md">
-                <Lightbulb className="w-4 h-4" />
-              </div>
-              AI Improvements Made
+          <div className="bg-green-500/5 rounded-lg p-3 border border-green-500/20">
+            <h4 className="text-xs font-semibold text-green-400 mb-2 flex items-center gap-1.5">
+              <Sparkles size={12} />
+              Improvements
             </h4>
-            <ul className="space-y-3">
+            <ul className="space-y-1.5">
               {section.improvements.map((improvement, index) => (
-                <li key={index} className="flex items-start gap-3 group">
-                  <div className="mt-1">
-                    <div className="w-6 h-6 rounded-full bg-brand-success/20 flex items-center justify-center group-hover:bg-brand-success/30 transition-colors">
-                      <span className="text-brand-success font-bold text-xs">{index + 1}</span>
-                    </div>
-                  </div>
-                  <span className="text-sm text-brand-text leading-relaxed flex-1">{improvement}</span>
+                <li key={index} className="flex items-start gap-2">
+                  <span className="text-green-400 text-xs mt-0.5">✓</span>
+                  <span className="text-xs text-brand-text leading-relaxed">{improvement}</span>
                 </li>
               ))}
             </ul>

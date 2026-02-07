@@ -284,8 +284,13 @@ export default function SavedJobDetailsPage() {
           </button>
           <button
             onClick={() => {
+              if (!job?.id) {
+                console.error('Error: job.id is undefined', { job });
+                alert('Job ID is missing. Please reload the page.');
+                return;
+              }
               const url = `/dashboard/applications/new?job_id=${job.id}&extracted=true`;
-              console.log('Navigating to:', url, 'with job.id:', job.id);
+              console.log('Navigating to:', url, 'with job:', job);
               router.push(url);
             }}
             className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-medium hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center justify-center gap-2"
