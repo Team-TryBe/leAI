@@ -889,7 +889,7 @@ export default function JobExtractorPage() {
                           View Details
                         </button>
                         <button
-                          onClick={() => router.push(`/dashboard/applications/new?job_id=${job.id}`)}
+                          onClick={() => router.push(`/dashboard/applications/new?job_id=${job.id}&extracted=true`)}
                           className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-medium hover:shadow-lg transition flex items-center justify-center gap-1.5"
                         >
                           <Save size={14} />
