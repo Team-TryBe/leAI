@@ -156,6 +156,11 @@ export default function JobExtractorPage() {
 
       if (response.ok) {
         const result = await response.json()
+        console.log('API Response:', result)
+        console.log('Jobs data:', result.data)
+        if (result.data && result.data.length > 0) {
+          console.log('First job sample:', result.data[0])
+        }
         setSavedJobs(result.data || [])
       }
     } catch (err) {
@@ -891,8 +896,17 @@ export default function JobExtractorPage() {
                         </button>
                         <button
                           onClick={() => {
+                            console.log('Full job object:', job);
+                            console.log('Job ID:', job.id);
+                            if (!job.id) {
+                              console.error('Error: job.id is undefined');
+                              alert('Error: Job ID is missing. Please refresh and try again.');
+                              return;
+                            }
                             console.log('Starting CV personalization for job:', job.id);
-                            router.push(`/dashboard/applications/new?job_id=${job.id}&extracted=true`);
+                            const url = `/dashboard/applications/new?job_id=${job.id}&extracted=true`;
+                            console.log('Navigating to:', url);
+                            router.push(url);
                           }}
                           className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-medium hover:shadow-lg transition flex items-center justify-center gap-1.5"
                         >
