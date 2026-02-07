@@ -4,6 +4,7 @@ Specialized for the Kenyan job market with local context awareness
 """
 
 import json
+import logging
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,7 @@ from app.api.users import get_current_user
 
 router = APIRouter(prefix="/cv-drafter", tags=["cv-drafter"])
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
