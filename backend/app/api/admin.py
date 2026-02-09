@@ -11,10 +11,11 @@ from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 
-from app.core.admin import get_current_admin_user
+from app.core.admin import get_current_admin_user, get_current_support_admin, get_current_finance_admin
 from app.db.database import get_db
 from app.db.models import (
     User,
+    UserRole,
     JobApplication,
     JobApplicationStatus,
     Subscription,
@@ -23,18 +24,43 @@ from app.db.models import (
     PlanType,
     Payment,
     PaymentStatus,
+    Transaction,
+    TransactionStatus,
     AdminActionLog,
 )
+from app.core.rbac import mask_sensitive_data
 from app.schemas import ApiResponse, UserResponse
+from app.api.auth import create_access_token
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 class AdminUpdateSubscriptionRequest(BaseModel):
-    plan_type: PlanType
+    action: Optional[str] = None  # 'cancel', 'extend', 'assign'
+    plan_type: Optional[PlanType] = None
+    plan_id: Optional[int] = None
+    days: Optional[int] = None
     status: Optional[SubscriptionStatus] = None
     auto_renew: Optional[bool] = None
+
+
+class AdminUpdateUserRoleRequest(BaseModel):
+    new_role: UserRole
+    reason: str
+
+
+class CreditAdjustmentRequest(BaseModel):
+    user_id: int
+    reason: str
+    amount: int = 1  # Always add 1 credit by default
+
+
+class ImpersonationResponse(BaseModel):
+    token: str
+    user_id: int
+    email: str
+    full_name: str
 
 
 async def log_admin_action(
@@ -195,7 +221,17 @@ async def get_all_users(
         )
     
     if admin_only is not None:
-        stmt = stmt.where(User.is_admin == admin_only)
+        staff_roles = [
+            UserRole.SUPER_ADMIN,
+            UserRole.SUPPORT_AGENT,
+            UserRole.FINANCE_ADMIN,
+            UserRole.CONTENT_MANAGER,
+            UserRole.COMPLIANCE_OFFICER,
+        ]
+        if admin_only:
+            stmt = stmt.where(or_(User.is_admin == True, User.role.in_(staff_roles)))
+        else:
+            stmt = stmt.where(and_(User.is_admin == False, ~User.role.in_(staff_roles)))
     
     if is_active is not None:
         stmt = stmt.where(User.is_active == is_active)
@@ -225,6 +261,9 @@ async def get_all_users(
     users_data = []
     for user in users:
         user_data = UserResponse.model_validate(user).model_dump()
+        user_data["role"] = user.role.value if hasattr(user.role, "value") else str(user.role)
+        user_data["last_login_at"] = user.last_login_at.isoformat() if user.last_login_at else None
+        user_data["last_login_ip"] = user.last_login_ip
         subscription = subscriptions_by_user_id.get(user.id)
         user_data["subscription"] = None
         if subscription and subscription.plan:
@@ -255,6 +294,150 @@ async def get_all_users(
     )
 
 
+@router.get("/users/lookup", response_model=ApiResponse[dict])
+async def lookup_users(
+    query: str = Query(..., min_length=2, description="Search by email or phone"),
+    limit: int = Query(10, ge=1, le=50),
+    admin_user: User = Depends(get_current_support_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """User lookup for support: search by email or phone."""
+    search_pattern = f"%{query}%"
+    stmt = (
+        select(User)
+        .where(
+            or_(
+                User.email.ilike(search_pattern),
+                User.phone.ilike(search_pattern)
+            )
+        )
+        .order_by(desc(User.updated_at))
+        .limit(limit)
+    )
+
+    result = await db.execute(stmt)
+    users = result.scalars().all()
+
+    users_data = []
+    for user in users:
+        user_data = {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "phone": user.phone,
+            "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+            "is_active": user.is_active,
+            "paygo_credits": user.paygo_credits,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        }
+        users_data.append(mask_sensitive_data(user_data, admin_user.role))
+
+    return ApiResponse(
+        success=True,
+        data={"users": users_data, "count": len(users_data)},
+    )
+
+
+@router.post("/users/credit", response_model=ApiResponse[dict])
+async def adjust_user_credits(
+    request_data: CreditAdjustmentRequest,
+    http_request: Request,
+    admin_user: User = Depends(get_current_support_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually add credits to a user (support tool)."""
+    if request_data.amount < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Credit amount must be at least 1",
+        )
+
+    result = await db.execute(select(User).where(User.id == request_data.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    user.paygo_credits = (user.paygo_credits or 0) + request_data.amount
+    await log_admin_action(
+        db=db,
+        admin_user=admin_user,
+        action="manual_credit",
+        target_type="user",
+        target_id=user.id,
+        details={
+            "amount": request_data.amount,
+            "reason": request_data.reason,
+        },
+        request=http_request,
+    )
+    await db.commit()
+
+    return ApiResponse(
+        success=True,
+        data={
+            "user_id": user.id,
+            "email": user.email,
+            "new_credits": user.paygo_credits,
+        },
+        message="Credits added successfully",
+    )
+
+
+@router.post("/users/{user_id}/impersonate", response_model=ApiResponse[ImpersonationResponse])
+async def impersonate_user(
+    user_id: int,
+    http_request: Request,
+    admin_user: User = Depends(get_current_support_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Generate a read-only impersonation token (Ghost Mode).
+    This is strictly logged and blocks any write actions.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    target_user = result.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    token = create_access_token(
+        data={
+            "sub": str(target_user.id),
+            "email": target_user.email,
+            "role": target_user.role.value if hasattr(target_user.role, "value") else str(target_user.role),
+            "impersonate": True,
+            "readonly": True,
+            "admin_id": admin_user.id,
+        }
+    )
+
+    await log_admin_action(
+        db=db,
+        admin_user=admin_user,
+        action="impersonate_user",
+        target_type="user",
+        target_id=target_user.id,
+        details={"reason": "support_debug"},
+        request=http_request,
+    )
+    await db.commit()
+
+    return ApiResponse(
+        success=True,
+        data=ImpersonationResponse(
+            token=token,
+            user_id=target_user.id,
+            email=target_user.email,
+            full_name=target_user.full_name,
+        ),
+    )
+
+
 @router.patch("/users/{user_id}/subscription", response_model=ApiResponse[dict])
 async def update_user_subscription(
     user_id: int,
@@ -274,15 +457,7 @@ async def update_user_subscription(
             detail="User not found",
         )
 
-    plan_result = await db.execute(select(Plan).where(Plan.plan_type == request.plan_type))
-    plan = plan_result.scalar_one_or_none()
-
-    if not plan:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Plan not found",
-        )
-
+    # Get current subscription
     sub_result = await db.execute(
         select(Subscription)
         .where(Subscription.user_id == user_id)
@@ -290,54 +465,126 @@ async def update_user_subscription(
     )
     subscription = sub_result.scalar_one_or_none()
 
-    previous_plan_type = (
-        subscription.plan.plan_type.value
-        if subscription and subscription.plan and hasattr(subscription.plan.plan_type, "value")
-        else (subscription.plan.plan_type if subscription and subscription.plan else None)
-    )
-
     now = datetime.utcnow()
+    action = request.action or 'update'
 
-    if not subscription:
-        subscription = Subscription(
-            user_id=user_id,
-            plan_id=plan.id,
-            status=request.status or SubscriptionStatus.ACTIVE,
-            started_at=now,
-            current_period_start=now,
-            current_period_end=now + timedelta(days=30)
-            if plan.period == "monthly"
-            else (now + timedelta(days=365) if plan.period == "annual" else None),
-            auto_renew=True if request.auto_renew is None else request.auto_renew,
-        )
-        db.add(subscription)
-    else:
-        subscription.plan_id = plan.id
-        if request.status is not None:
-            subscription.status = request.status
-        if request.auto_renew is not None:
-            subscription.auto_renew = request.auto_renew
+    # Handle action-based requests
+    if action == 'cancel':
+        if not subscription:
+            raise HTTPException(status_code=404, detail="No subscription to cancel")
+        
+        subscription.status = SubscriptionStatus.CANCELLED
+        subscription.cancellation_requested = True
+        subscription.auto_renew = False
         subscription.updated_at = now
-        subscription.cancellation_requested = False
-        if plan.period == "monthly":
-            subscription.current_period_end = now + timedelta(days=30)
-        elif plan.period == "annual":
-            subscription.current_period_end = now + timedelta(days=365)
 
-    await log_admin_action(
-        db=db,
-        admin_user=admin_user,
-        action="update_subscription",
-        target_type="user",
-        target_id=user_id,
-        details={
-            "previous_plan": previous_plan_type,
-            "new_plan": plan.plan_type.value if hasattr(plan.plan_type, "value") else plan.plan_type,
-            "status": request.status.value if request.status else None,
-            "auto_renew": request.auto_renew,
-        },
-        request=http_request,
-    )
+        await log_admin_action(
+            db=db, admin_user=admin_user, action="cancel_subscription",
+            target_type="user", target_id=user_id,
+            details={"plan": subscription.plan.name if subscription.plan else None},
+            request=http_request,
+        )
+
+    elif action == 'extend':
+        if not subscription:
+            raise HTTPException(status_code=404, detail="No subscription to extend")
+        
+        days = request.days or 30
+        if subscription.current_period_end:
+            subscription.current_period_end = subscription.current_period_end + timedelta(days=days)
+        else:
+            subscription.current_period_end = now + timedelta(days=days)
+        
+        subscription.updated_at = now
+
+        await log_admin_action(
+            db=db, admin_user=admin_user, action="extend_subscription",
+            target_type="user", target_id=user_id,
+            details={"days": days, "new_end": subscription.current_period_end.isoformat()},
+            request=http_request,
+        )
+
+    elif action == 'assign':
+        # Get plan by ID or type
+        plan = None
+        if request.plan_id:
+            plan_result = await db.execute(select(Plan).where(Plan.id == request.plan_id))
+            plan = plan_result.scalar_one_or_none()
+        elif request.plan_type:
+            plan_result = await db.execute(select(Plan).where(Plan.plan_type == request.plan_type))
+            plan = plan_result.scalar_one_or_none()
+        
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+
+        if not subscription:
+            subscription = Subscription(
+                user_id=user_id,
+                plan_id=plan.id,
+                status=SubscriptionStatus.ACTIVE,
+                started_at=now,
+                current_period_start=now,
+                current_period_end=now + timedelta(days=30) if plan.period == "monthly" else (now + timedelta(days=365) if plan.period == "annual" else None),
+                auto_renew=True,
+            )
+            db.add(subscription)
+        else:
+            subscription.plan_id = plan.id
+            subscription.status = SubscriptionStatus.ACTIVE
+            subscription.updated_at = now
+
+        await log_admin_action(
+            db=db, admin_user=admin_user, action="assign_subscription",
+            target_type="user", target_id=user_id,
+            details={"plan": plan.name},
+            request=http_request,
+        )
+
+    else:
+        # Legacy update flow
+        if not request.plan_type:
+            raise HTTPException(status_code=400, detail="plan_type is required for update action")
+
+        plan_result = await db.execute(select(Plan).where(Plan.plan_type == request.plan_type))
+        plan = plan_result.scalar_one_or_none()
+
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+
+        previous_plan_type = (
+            subscription.plan.plan_type.value if subscription and subscription.plan and hasattr(subscription.plan.plan_type, "value")
+            else (subscription.plan.plan_type if subscription and subscription.plan else None)
+        )
+
+        if not subscription:
+            subscription = Subscription(
+                user_id=user_id,
+                plan_id=plan.id,
+                status=request.status or SubscriptionStatus.ACTIVE,
+                started_at=now,
+                current_period_start=now,
+                current_period_end=now + timedelta(days=30) if plan.period == "monthly" else (now + timedelta(days=365) if plan.period == "annual" else None),
+                auto_renew=True if request.auto_renew is None else request.auto_renew,
+            )
+            db.add(subscription)
+        else:
+            subscription.plan_id = plan.id
+            if request.status is not None:
+                subscription.status = request.status
+            if request.auto_renew is not None:
+                subscription.auto_renew = request.auto_renew
+            subscription.updated_at = now
+            subscription.cancellation_requested = False
+
+        await log_admin_action(
+            db=db, admin_user=admin_user, action="update_subscription",
+            target_type="user", target_id=user_id,
+            details={
+                "previous_plan": previous_plan_type,
+                "new_plan": plan.plan_type.value if hasattr(plan.plan_type, "value") else plan.plan_type,
+            },
+            request=http_request,
+        )
 
     await db.commit()
     await db.refresh(subscription)
@@ -348,16 +595,10 @@ async def update_user_subscription(
             "user_id": user_id,
             "subscription": {
                 "plan_id": subscription.plan_id,
-                "plan_type": plan.plan_type.value
-                if hasattr(plan.plan_type, "value")
-                else plan.plan_type,
-                "plan_name": plan.name,
-                "status": subscription.status.value
-                if hasattr(subscription.status, "value")
-                else subscription.status,
-                "current_period_end": subscription.current_period_end.isoformat()
-                if subscription.current_period_end
-                else None,
+                "plan_type": subscription.plan.plan_type.value if hasattr(subscription.plan.plan_type, "value") else subscription.plan.plan_type,
+                "plan_name": subscription.plan.name,
+                "status": subscription.status.value if hasattr(subscription.status, "value") else subscription.status,
+                "current_period_end": subscription.current_period_end.isoformat() if subscription.current_period_end else None,
                 "auto_renew": subscription.auto_renew,
             },
         },
@@ -459,15 +700,98 @@ async def toggle_admin_status(
     )
 
 
+@router.patch("/users/{user_id}/role", response_model=ApiResponse[UserResponse])
+async def update_user_role(
+    user_id: int,
+    request_data: AdminUpdateUserRoleRequest,
+    http_request: Request,
+    admin_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a user's RBAC role (Super Admin only, MFA required)."""
+
+    if admin_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super Admin access required",
+        )
+
+    if not admin_user.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MFA must be enabled for Super Admin access",
+        )
+
+    if user_id == admin_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot modify your own role",
+        )
+
+    stmt = select(User).where(User.id == user_id)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    old_role = user.role
+    user.role = request_data.new_role
+    user.updated_at = datetime.utcnow()
+
+    staff_roles = {
+        UserRole.SUPER_ADMIN,
+        UserRole.SUPPORT_AGENT,
+        UserRole.FINANCE_ADMIN,
+        UserRole.CONTENT_MANAGER,
+        UserRole.COMPLIANCE_OFFICER,
+    }
+    user.is_admin = user.role in staff_roles
+
+    db.add(user)
+    await log_admin_action(
+        db=db,
+        admin_user=admin_user,
+        action="update_user_role",
+        target_type="user",
+        target_id=user.id,
+        details={
+            "old_role": old_role.value if hasattr(old_role, "value") else str(old_role),
+            "new_role": request_data.new_role.value if hasattr(request_data.new_role, "value") else str(request_data.new_role),
+            "reason": request_data.reason,
+            "user_email": user.email,
+        },
+        request=http_request,
+    )
+    await db.commit()
+    await db.refresh(user)
+
+    return ApiResponse(
+        success=True,
+        data=UserResponse.model_validate(user),
+        message="User role updated successfully",
+    )
+
+
 @router.patch("/users/{user_id}/active-status", response_model=ApiResponse[UserResponse])
 async def toggle_active_status(
     user_id: int,
     is_active: bool,
     http_request: Request,
+    reason: Optional[str] = Query(None, description="Reason for status change"),
     admin_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Activate or deactivate a user account."""
+
+    if not reason or not reason.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reason is required",
+        )
     
     if user_id == admin_user.id:
         raise HTTPException(
@@ -497,6 +821,7 @@ async def toggle_active_status(
         details={
             "previous_is_active": previous_is_active,
             "new_is_active": is_active,
+            "reason": reason,
             "user_email": user.email,
         },
         request=http_request,
@@ -514,10 +839,17 @@ async def toggle_active_status(
 async def delete_user(
     user_id: int,
     http_request: Request,
+    reason: Optional[str] = Query(None, description="Reason for deletion"),
     admin_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Permanently delete a user and all associated data."""
+
+    if not reason or not reason.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reason is required",
+        )
     
     if user_id == admin_user.id:
         raise HTTPException(
@@ -542,7 +874,10 @@ async def delete_user(
         action="delete_user",
         target_type="user",
         target_id=user.id,
-        details={"user_email": user.email},
+        details={
+            "reason": reason,
+            "user_email": user.email,
+        },
         request=http_request,
     )
     await db.commit()
@@ -757,6 +1092,142 @@ async def get_system_analytics(
             },
             "timestamp": datetime.utcnow().isoformat(),
         },
+    )
+
+
+# ==================== Financial Oversight (M-Pesa Recon) ====================
+
+@router.get("/transactions", response_model=ApiResponse[dict])
+async def list_transactions(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    status_filter: Optional[TransactionStatus] = Query(None),
+    result_code: Optional[int] = Query(None),
+    admin_user: User = Depends(get_current_finance_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Live transaction log for M-Pesa callbacks."""
+    stmt = select(Transaction, User.email).join(User, User.id == Transaction.user_id)
+
+    if status_filter:
+        stmt = stmt.where(Transaction.status == status_filter)
+
+    if result_code is not None:
+        stmt = stmt.where(Transaction.result_code == result_code)
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    count_result = await db.execute(count_stmt)
+    total = count_result.scalar()
+
+    stmt = stmt.order_by(desc(Transaction.created_at)).offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    transactions = []
+    for tx, email in rows:
+        transactions.append({
+            "id": tx.id,
+            "receipt_code": tx.mpesa_receipt_number,
+            "phone": tx.phone_number,
+            "amount": tx.amount,
+            "status": tx.status.value if hasattr(tx.status, "value") else str(tx.status),
+            "result_code": tx.result_code,
+            "result_desc": tx.result_desc,
+            "account_reference": tx.account_reference,
+            "user_id": tx.user_id,
+            "user_email": email,
+            "created_at": tx.created_at.isoformat() if tx.created_at else None,
+            "completed_at": tx.completed_at.isoformat() if tx.completed_at else None,
+        })
+
+    return ApiResponse(
+        success=True,
+        data={"transactions": transactions, "total": total, "skip": skip, "limit": limit},
+    )
+
+
+@router.get("/transactions/orphaned", response_model=ApiResponse[dict])
+async def list_orphaned_payments(
+    limit: int = Query(50, ge=1, le=200),
+    admin_user: User = Depends(get_current_finance_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Find orphaned payments where M-Pesa succeeded but credits didn't update.
+    Rule: Successful paygo transactions > user.paygo_credits
+    """
+    success_stmt = (
+        select(Transaction.user_id, func.count(Transaction.id))
+        .where(
+            and_(
+                Transaction.result_code == 0,
+                Transaction.account_reference == "paygo",
+                Transaction.status == TransactionStatus.COMPLETED,
+            )
+        )
+        .group_by(Transaction.user_id)
+    )
+    success_result = await db.execute(success_stmt)
+    success_counts = {row[0]: row[1] for row in success_result.all()}
+
+    if not success_counts:
+        return ApiResponse(success=True, data={"transactions": [], "total": 0})
+
+    users_stmt = select(User).where(User.id.in_(list(success_counts.keys())))
+    users_result = await db.execute(users_stmt)
+    users = users_result.scalars().all()
+
+    mismatched_user_ids = []
+    user_credit_map = {}
+    for user in users:
+        expected = success_counts.get(user.id, 0)
+        actual = user.paygo_credits or 0
+        if actual < expected:
+            mismatched_user_ids.append(user.id)
+        user_credit_map[user.id] = {"expected": expected, "actual": actual}
+
+    if not mismatched_user_ids:
+        return ApiResponse(success=True, data={"transactions": [], "total": 0})
+
+    tx_stmt = (
+        select(Transaction, User.email)
+        .join(User, User.id == Transaction.user_id)
+        .where(
+            and_(
+                Transaction.user_id.in_(mismatched_user_ids),
+                Transaction.result_code == 0,
+                Transaction.account_reference == "paygo",
+                Transaction.status == TransactionStatus.COMPLETED,
+            )
+        )
+        .order_by(desc(Transaction.created_at))
+        .limit(limit)
+    )
+    tx_result = await db.execute(tx_stmt)
+    rows = tx_result.all()
+
+    orphaned = []
+    for tx, email in rows:
+        credits_info = user_credit_map.get(tx.user_id, {"expected": 0, "actual": 0})
+        orphaned.append({
+            "id": tx.id,
+            "receipt_code": tx.mpesa_receipt_number,
+            "phone": tx.phone_number,
+            "amount": tx.amount,
+            "status": tx.status.value if hasattr(tx.status, "value") else str(tx.status),
+            "result_code": tx.result_code,
+            "account_reference": tx.account_reference,
+            "user_id": tx.user_id,
+            "user_email": email,
+            "expected_credits": credits_info["expected"],
+            "actual_credits": credits_info["actual"],
+            "created_at": tx.created_at.isoformat() if tx.created_at else None,
+            "completed_at": tx.completed_at.isoformat() if tx.completed_at else None,
+        })
+
+    return ApiResponse(
+        success=True,
+        data={"transactions": orphaned, "total": len(orphaned)},
     )
 
 

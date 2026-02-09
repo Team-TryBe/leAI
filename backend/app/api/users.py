@@ -37,22 +37,27 @@ def get_token_from_header(request: Request) -> str:
     return auth_header[7:]  # Remove "Bearer " prefix
 
 
-def get_current_user_id(token: str) -> int:
-    """Extract user ID from JWT token."""
+def get_token_payload(token: str) -> dict:
+    """Decode JWT token and return payload."""
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-            )
-        return int(user_id)
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
         )
+
+
+def get_current_user_id(token: str) -> int:
+    """Extract user ID from JWT token."""
+    payload = get_token_payload(token)
+    user_id: str = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+        )
+    return int(user_id)
 
 
 async def get_current_user(
@@ -61,8 +66,14 @@ async def get_current_user(
 ) -> User:
     """Dependency to get current authenticated user."""
     token = get_token_from_header(request)
-    user_id = get_current_user_id(token)
-    stmt = select(User).where(User.id == user_id)
+    payload = get_token_payload(token)
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+        )
+    stmt = select(User).where(User.id == int(user_id))
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
@@ -71,6 +82,18 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
+
+    # Enforce read-only impersonation tokens for non-GET requests
+    if payload.get("readonly") and request.method not in {"GET", "HEAD", "OPTIONS"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Impersonation tokens are read-only. Action blocked.",
+        )
+
+    # Attach impersonation metadata for downstream use
+    user.is_impersonating = bool(payload.get("impersonate"))
+    user.impersonated_by = payload.get("admin_id")
+    user.readonly_session = bool(payload.get("readonly"))
     return user
 
 

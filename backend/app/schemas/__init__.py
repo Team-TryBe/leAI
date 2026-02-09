@@ -65,6 +65,8 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     """Schema for user response."""
     id: int
+    role: Optional[str] = None
+    mfa_enabled: bool = False
     is_admin: bool = False
     is_active: bool = True
     created_at: datetime

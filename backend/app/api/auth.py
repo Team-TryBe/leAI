@@ -159,7 +159,7 @@ async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
     "/login",
     response_model=ApiResponse[LoginResponse],
 )
-async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(req: LoginRequest, http_request: Request, db: AsyncSession = Depends(get_db)):
     """
     Login with email and password.
 
@@ -183,9 +183,21 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
             detail="Please verify your email before logging in",
         )
 
-    # Generate token
+    # Update last login timestamp and IP address
+    user.last_login_at = datetime.utcnow()
+    user.last_login_ip = http_request.client.host if http_request.client else None
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    # Generate token (include role for RBAC middleware)
     access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email}
+        data={
+            "sub": str(user.id),
+            "email": user.email,
+            "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+            "mfa_enabled": user.mfa_enabled,
+        }
     )
 
     return ApiResponse(
@@ -307,7 +319,7 @@ class GoogleAuthRequest(BaseModel):
 
 
 @router.post("/google", response_model=ApiResponse[LoginResponse])
-async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
+async def google_auth(req: GoogleAuthRequest, http_request: Request, db: AsyncSession = Depends(get_db)):
     """Login or signup using Google OAuth ID token."""
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(
@@ -344,6 +356,8 @@ async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)
             hashed_password=hash_password(secrets.token_urlsafe(24)),
             email_verified=email_verified,
             google_sub=google_sub,
+            last_login_at=datetime.utcnow(),
+            last_login_ip=http_request.client.host if http_request.client else None,
         )
         db.add(user)
         await db.commit()
@@ -353,6 +367,9 @@ async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)
             user.email_verified = True
         if google_sub and not user.google_sub:
             user.google_sub = google_sub
+        # Update last login for returning users
+        user.last_login_at = datetime.utcnow()
+        user.last_login_ip = http_request.client.host if http_request.client else None
         db.add(user)
         await db.commit()
         await db.refresh(user)

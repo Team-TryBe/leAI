@@ -593,9 +593,13 @@ async def get_admin_applications(
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
         
-        # Get total count
-        count_result = await db.execute(select(JobApplication))
-        total = len(count_result.scalars().all())
+        # Get total count efficiently using func.count()
+        from sqlalchemy import func
+        count_query = select(func.count()).select_from(JobApplication)
+        if status:
+            count_query = count_query.where(JobApplication.status == status_enum)
+        count_result = await db.execute(count_query)
+        total = count_result.scalar() or 0
         
         # Apply pagination
         query = query.order_by(desc(JobApplication.created_at))
@@ -870,6 +874,18 @@ async def get_email_config(
         # Fetch job data
         job_data = await db.get(ExtractedJobData, application.extracted_data_id)
         
+        # Generate default email message
+        default_message = f"""Dear Hiring Manager,
+
+I am writing to express my interest in the {job_data.job_title if job_data else 'position'} at {job_data.company_name if job_data else 'your company'}.
+
+I have attached my CV and cover letter for your review. I am confident that my skills and experience align well with your requirements.
+
+Thank you for considering my application. I look forward to the opportunity to discuss how I can contribute to your team.
+
+Best regards,
+{current_user.full_name}"""
+        
         return ApiResponse(
             success=True,
             data={
@@ -880,6 +896,7 @@ async def get_email_config(
                 "cc_emails": job_data.application_email_cc.split(",") if job_data and job_data.application_email_cc else [],
                 "application_method": job_data.application_method if job_data else "Email",
                 "gmail_connected": current_user.gmail_connected,
+                "default_message": default_message,
             },
         )
         

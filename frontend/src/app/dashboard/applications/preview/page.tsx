@@ -540,7 +540,17 @@ function CVPreviewPageContent() {
 
   const queueApplication = async (cv: CVDraft) => {
     try {
+      if (!cv) {
+        alert("CV draft not ready yet. Please wait and try again.");
+        return;
+      }
+
       const token = getAuthToken();
+      if (!token) {
+        alert("You are not logged in. Please sign in and try again.");
+        return;
+      }
+
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
       const response = await fetch(`${apiUrl}/api/v1/applications/queue`, {
@@ -551,13 +561,20 @@ function CVPreviewPageContent() {
         },
         body: JSON.stringify({
           job_id: parseInt(jobId!),
-          cv: cvDraft,
-          cover_letter: coverLetter,
+          cv,
+          cover_letter: coverLetter || undefined,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to queue application");
+        let errorMessage = "Failed to queue application";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorMessage;
+        } catch {
+          // ignore parse errors
+        }
+        throw new Error(errorMessage);
       }
 
       // Show success message and redirect
@@ -567,7 +584,7 @@ function CVPreviewPageContent() {
       router.push("/dashboard/applications");
     } catch (error) {
       console.error("Error queueing application:", error);
-      alert("Failed to queue application. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to queue application. Please try again.");
     }
   };
 

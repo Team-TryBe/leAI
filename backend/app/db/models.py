@@ -124,7 +124,16 @@ class User(Base):
     professional_summary = Column(Text, nullable=True)
     
     # Role-Based Access Control
-    role = Column(SQLEnum(UserRole), default=UserRole.CANDIDATE, nullable=False, index=True)
+    role = Column(
+        SQLEnum(
+            UserRole,
+            name="user_role",
+            values_callable=lambda enum: [e.value for e in enum],
+        ),
+        default=UserRole.CANDIDATE,
+        nullable=False,
+        index=True,
+    )
     mfa_enabled = Column(Boolean, default=False, nullable=False)  # Required for SUPER_ADMIN
     mfa_secret = Column(String(255), nullable=True)  # TOTP secret (encrypted)
     last_login_at = Column(DateTime, nullable=True)

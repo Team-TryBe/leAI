@@ -79,6 +79,7 @@ export const SendEmailModal: React.FC<SendEmailModalProps> = ({
       if (data.success && data.data) {
         setToEmails(data.data.to_emails || []);
         setCcEmails(data.data.cc_emails || []);
+        setCustomMessage(data.data.default_message || "");
         setEmailConfig(data.data);
       }
     } catch (err) {
@@ -299,17 +300,17 @@ export const SendEmailModal: React.FC<SendEmailModalProps> = ({
           {/* Custom Message */}
           <div>
             <label className="block text-sm font-semibold text-brand-text mb-2">
-              Custom Message: <span className="text-xs text-brand-text-muted">(Optional)</span>
+              Email Message:
             </label>
             <textarea
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
-              placeholder="Add a personal message to include in the email (optional)"
+              placeholder="Loading default message..."
               className="w-full px-3 py-2 bg-brand-dark border border-brand-dark-border rounded-lg text-sm text-brand-text placeholder-brand-text-muted focus:outline-none focus:border-brand-accent"
-              rows={4}
+              rows={10}
             />
             <p className="text-xs text-brand-text-muted mt-1">
-              A default professional message will be sent if you don't add a custom message.
+              Review and edit the message above before sending. This will be the email body.
             </p>
           </div>
 

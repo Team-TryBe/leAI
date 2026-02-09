@@ -381,6 +381,21 @@ async def draft_cv(
         total_text = json.dumps(cv_data)
         word_count = len(total_text.split())
         
+        # Estimate page count (rough: 400-500 words per page)
+        page_count = max(1, (word_count // 450) + (1 if word_count % 450 > 0 else 0))
+        
+        # Add metadata
+        cv_data["job_title"] = job_data.job_title
+        cv_data["company_name"] = job_data.company_name
+        cv_data["page_count"] = page_count
+        cv_data["word_count"] = word_count
+        
+        return ApiResponse(
+            success=True,
+            message="CV drafted successfully",
+            data=CVDraftResponse(**cv_data)
+        )
+        
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Failed to draft CV: {error_msg}")
@@ -401,25 +416,3 @@ async def draft_cv(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to draft CV: {error_msg}"
             )
-        
-        # Estimate page count (rough: 400-500 words per page)
-        page_count = max(1, (word_count // 450) + (1 if word_count % 450 > 0 else 0))
-        
-        # Add metadata
-        cv_data["job_title"] = job_data.job_title
-        cv_data["company_name"] = job_data.company_name
-        cv_data["page_count"] = page_count
-        cv_data["word_count"] = word_count
-        
-        return ApiResponse(
-            success=True,
-            message="CV drafted successfully",
-            data=CVDraftResponse(**cv_data)
-        )
-        
-    except Exception as e:
-        print(f"❌ CV Drafting error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to draft CV: {str(e)}"
-        )
