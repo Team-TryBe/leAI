@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { LogOut, Settings, CreditCard, Home, Menu, X, FileText, Sparkles, Send } from 'lucide-react'
 import { useState } from 'react'
@@ -19,8 +20,8 @@ export function Sidebar() {
 
   const coreFlowItems = [
     { href: '/dashboard', icon: Home, label: 'Overview' },
-    { href: '/dashboard/job-extractor', icon: Sparkles, label: 'Job Extractor' },
     { href: '/dashboard/master-cv', icon: FileText, label: 'Master CV' },
+    { href: '/dashboard/job-extractor', icon: Sparkles, label: 'Job Extractor' },
     { href: '/dashboard/applications', icon: Send, label: 'Applications' },
   ]
 
@@ -55,11 +56,15 @@ export function Sidebar() {
       >
         <div className="flex flex-col h-full p-3 space-y-4">
           {/* Logo */}
-          <Link
-            href="/dashboard"
-            className="text-lg font-display font-bold bg-gradient-brand bg-clip-text text-transparent"
-          >
-            Aditus
+          <Link href="/dashboard" className="flex items-center">
+            <Image
+              src="/logos/white_full_logo.png"
+              alt="LeAI Logo"
+              width={120}
+              height={40}
+              priority
+              className="h-8 w-auto"
+            />
           </Link>
 
           {/* Navigation */}

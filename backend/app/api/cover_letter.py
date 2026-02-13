@@ -4,6 +4,7 @@ Tailored to specific job requirements and company culture
 """
 
 import json
+import re
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,7 +70,7 @@ Application Email: {application_email}
 Application Deadline: {deadline}
 
 **Goal:**
-Write a compelling, professional cover letter for a Kenyan job application that:
+Write ONLY the body paragraphs (no greeting, no sign-off, no signature) for a professional Kenyan cover letter that:
 - Demonstrates genuine interest in the role and company
 - Highlights relevant experience and achievements
 - Shows cultural fit with Kenyan workplace norms
@@ -78,13 +79,10 @@ Write a compelling, professional cover letter for a Kenyan job application that:
 
 **Critical Rules:**
 
-1. **Structure** (DO NOT DUPLICATE):
-   - Opening: "Dear Hiring Manager," (ONLY ONCE at start)
-   - Introduction: State the position and express enthusiasm (in first paragraph only)
-   - Body Paragraphs (2-3): Match experience to job requirements with specific examples
-   - Closing: Express availability, thank them, and include call to action
-   - Sign-off: "Yours sincerely," (Kenyan convention) - ONLY ONCE at the very end
-   - Signature: [Full Name], [Phone], [Email]
+1. **Structure** (BODY ONLY):
+    - Do NOT include any greeting (e.g., "Dear Hiring Manager")
+    - Do NOT include any sign-off or signature (e.g., "Yours sincerely", name, phone, email)
+    - Return 3 concise body paragraphs only
 
 2. **Tone**: {tone} - Professional yet personable, confident but not arrogant
 
@@ -118,18 +116,15 @@ Write a compelling, professional cover letter for a Kenyan job application that:
    - DUPLICATE greetings (only "Dear Hiring Manager," once)
    - DUPLICATE sign-offs (only "Yours sincerely," once)
 
-7. **Length**: 250-400 words (3-4 paragraphs after opening)
+7. **Length**: 220-320 words (3 body paragraphs)
 
 **Output Format:**
-Return ONLY a valid JSON object with this structure (NO DUPLICATES):
+Return ONLY a valid JSON object with this structure (BODY ONLY):
 
 {{
-  "opening": "Dear Hiring Manager,",
-  "body_paragraph_1": "I am writing to apply for the [Job Title] position at [Company]. With [X] years of experience in...",
-  "body_paragraph_2": "In my previous role at [Company], I [specific achievement relevant to job]. This demonstrates my ability to...",
-  "body_paragraph_3": "I am particularly drawn to [Company] because [specific reason showing company research]. I am confident that my [specific skill/experience] would enable me to contribute meaningfully to your team.",
-  "closing": "I would welcome the opportunity to discuss how my background aligns with your needs. I am available for an interview at your earliest convenience.",
-  "signature": "Yours sincerely,\n\n[Full Name]\n[Phone]\n[Email]",
+    "body_paragraph_1": "I am writing to apply for the [Job Title] position at [Company]. With [X] years of experience in...",
+    "body_paragraph_2": "In my previous role at [Company], I [specific achievement relevant to job]. This demonstrates my ability to...",
+    "body_paragraph_3": "I am particularly drawn to [Company] because [specific reason showing company research]. I am confident that my [specific skill/experience] would enable me to contribute meaningfully to your team.",
   "key_points_highlighted": [
     "Addressed requirement: [specific requirement]",
     "Demonstrated skill: [specific skill]",
@@ -144,8 +139,8 @@ Return ONLY a valid JSON object with this structure (NO DUPLICATES):
 - Keep it authentic and genuine
 - Make it specific to THIS job and company
 - Ensure perfect grammar and spelling
-- NO DUPLICATE GREETINGS
-- NO DUPLICATE SIGN-OFFS
+- NO GREETINGS
+- NO SIGN-OFFS
 """
 
 
@@ -202,6 +197,55 @@ def extract_json_from_response(text: str) -> dict:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to parse cover letter response: {str(e)}"
         )
+
+
+def _strip_duplicate_greeting(text: str) -> str:
+    """Remove greeting if present at the start of a paragraph."""
+    if not text:
+        return text
+    return re.sub(r'^\s*dear\s+[^\n,]*,?\s*\n*', '', text, flags=re.IGNORECASE).strip()
+
+
+def _strip_duplicate_signoff(text: str) -> str:
+    """Remove sign-off if present at the start of a paragraph."""
+    if not text:
+        return text
+    return re.sub(
+        r'^\s*(yours sincerely|yours faithfully|sincerely|best regards|kind regards)[,]*\s*\n*',
+        '',
+        text,
+        flags=re.IGNORECASE,
+    ).strip()
+
+
+def _normalize_opening(text: str) -> str:
+    """Keep only the first greeting line in the opening."""
+    if not text:
+        return text
+    match = re.search(r'(dear\s+[^\n,]*,?)', text, flags=re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return text.strip()
+
+
+def _normalize_signature(text: str) -> str:
+    """Keep a single sign-off line in signature; remove duplicates."""
+    if not text:
+        return text
+    # Split lines and keep the first sign-off if multiple appear
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return text.strip()
+    signoff_pattern = re.compile(r'^(yours sincerely|yours faithfully|sincerely|best regards|kind regards)\b', re.IGNORECASE)
+    normalized_lines = []
+    seen_signoff = False
+    for line in lines:
+        if signoff_pattern.match(line):
+            if seen_signoff:
+                continue
+            seen_signoff = True
+        normalized_lines.append(line)
+    return "\n\n".join(normalized_lines).strip()
 
 
 # ============================================================================
@@ -284,27 +328,20 @@ async def generate_cover_letter(
         
         # Combine paragraphs into full content, preventing duplicates
         parts = []
-        
-        # Add opening (e.g., "Dear Hiring Manager,")
-        opening = cover_letter_data.get("opening", "").strip()
-        if opening:
-            parts.append(opening)
-        
-        # Add body paragraphs
-        for key in ["body_paragraph_1", "body_paragraph_2", "body_paragraph_3"]:
-            paragraph = cover_letter_data.get(key, "").strip()
+
+        body_1 = cover_letter_data.get("body_paragraph_1", "").strip()
+        body_2 = cover_letter_data.get("body_paragraph_2", "").strip()
+        body_3 = cover_letter_data.get("body_paragraph_3", "").strip()
+
+        # Ensure no greetings/sign-offs are included in body
+        body_1 = _strip_duplicate_signoff(_strip_duplicate_greeting(body_1))
+        body_2 = _strip_duplicate_signoff(_strip_duplicate_greeting(body_2))
+        body_3 = _strip_duplicate_signoff(_strip_duplicate_greeting(body_3))
+
+        # Add body paragraphs only
+        for paragraph in [body_1, body_2, body_3]:
             if paragraph:
                 parts.append(paragraph)
-        
-        # Add closing
-        closing = cover_letter_data.get("closing", "").strip()
-        if closing:
-            parts.append(closing)
-        
-        # Add signature (which includes the sign-off like "Yours sincerely,")
-        signature = cover_letter_data.get("signature", "").strip()
-        if signature:
-            parts.append(signature)
         
         # Join all parts with double newlines
         full_content = "\n\n".join(parts).strip()
@@ -319,12 +356,12 @@ async def generate_cover_letter(
                 content=full_content,
                 word_count=word_count,
                 structure={
-                    "opening": cover_letter_data.get("opening", ""),
+                    "opening": "",
                     "body_1": cover_letter_data.get("body_paragraph_1", ""),
                     "body_2": cover_letter_data.get("body_paragraph_2", ""),
                     "body_3": cover_letter_data.get("body_paragraph_3", ""),
-                    "closing": cover_letter_data.get("closing", ""),
-                    "signature": cover_letter_data.get("signature", ""),
+                    "closing": "",
+                    "signature": "",
                     "subject_line": cover_letter_data.get("subject_line", "")
                 },
                 key_points=cover_letter_data.get("key_points_highlighted", []),

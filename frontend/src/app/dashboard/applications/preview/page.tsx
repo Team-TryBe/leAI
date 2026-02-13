@@ -6,6 +6,7 @@ import {
   FileText,
   Eye,
   Download,
+  Send,
   CheckCircle,
   AlertTriangle,
   Phone,
@@ -36,10 +37,6 @@ if (typeof window !== "undefined") {
     html2pdf = module.default;
   });
 }
-
-// ============================================================================
-// TYPES
-// ============================================================================
 
 interface SocialLink {
   label: string;
@@ -328,6 +325,8 @@ function CVPreviewPageContent() {
   const [jobData, setJobData] = useState<JobData | null>(null);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
+  const [hasValidated, setHasValidated] = useState(false);
+  const [draftReadyMessage, setDraftReadyMessage] = useState<string | null>(null);
   const [coverLetter, setCoverLetter] = useState<CoverLetter | null>(null);
   const [generatingCoverLetter, setGeneratingCoverLetter] = useState(false);
   const [showCoverLetter, setShowCoverLetter] = useState(false);
@@ -417,9 +416,9 @@ function CVPreviewPageContent() {
         setJobData(jobResult.data);
       }
 
-      // Run validation
       if (draftData.data) {
-        validateCV(draftData.data);
+        setHasValidated(false);
+        setDraftReadyMessage("CV draft ready for validation and queuing.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -460,9 +459,9 @@ function CVPreviewPageContent() {
       console.log("✅ CV regenerated successfully:", draftData);
       setCVDraft(draftData.data);
 
-      // Run validation on new draft
       if (draftData.data) {
-        validateCV(draftData.data);
+        setHasValidated(false);
+        setDraftReadyMessage("CV draft ready for validation and queuing.");
       }
     } catch (err) {
       console.error("❌ Regeneration error:", err);
@@ -527,15 +526,7 @@ function CVPreviewPageContent() {
     }
 
     setValidationIssues(issues);
-
-    // Queue application if validation passes critical checks
-    const hasCriticalIssues = issues.some(
-      (issue) => issue.category === "critical"
-    );
-
-    if (!hasCriticalIssues) {
-      await queueApplication(cv);
-    }
+    setHasValidated(true);
   };
 
   const queueApplication = async (cv: CVDraft) => {
@@ -577,11 +568,8 @@ function CVPreviewPageContent() {
         throw new Error(errorMessage);
       }
 
-      // Show success message and redirect
-      alert(
-        "✅ Application queued successfully! Navigate to Applications to submit."
-      );
-      router.push("/dashboard/applications");
+      // Show success message without redirect
+      alert("✅ Application queued successfully!");
     } catch (error) {
       console.error("Error queueing application:", error);
       alert(error instanceof Error ? error.message : "Failed to queue application. Please try again.");
@@ -639,6 +627,10 @@ function CVPreviewPageContent() {
   // ========================================================================
   // RENDERING
   // ========================================================================
+
+  const hasCriticalIssues = validationIssues.some(
+    (issue) => issue.category === "critical"
+  );
 
   if (loading) {
     return (
@@ -754,12 +746,40 @@ function CVPreviewPageContent() {
                 </>
               )}
             </button>
+            {coverLetter && (
+              <button
+                onClick={generateCoverLetter}
+                disabled={generatingCoverLetter}
+                className="px-4 py-2 bg-brand-dark-card border border-brand-dark-border text-brand-text rounded-lg hover:bg-brand-dark-border/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Regenerate cover letter"
+              >
+                {generatingCoverLetter ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <Undo className="w-4 h-4" />
+                    Regenerate Letter
+                  </>
+                )}
+              </button>
+            )}
             <button
               onClick={() => cvDraft && validateCV(cvDraft)}
               className="px-4 py-2 bg-brand-dark-card border border-brand-dark-border text-brand-text rounded-lg hover:bg-brand-dark-border/20 transition-all flex items-center gap-2"
             >
               <CheckCircle className="w-4 h-4" />
-              Validate & Queue
+              Validate CV
+            </button>
+            <button
+              onClick={() => cvDraft && queueApplication(cvDraft)}
+              disabled={!hasValidated || hasCriticalIssues}
+              className="px-4 py-2 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded-lg hover:bg-emerald-500/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send className="w-4 h-4" />
+              Queue Application
             </button>
             <button
               onClick={() => cvDraft && generateCVPDF(cvDraft)}
@@ -771,6 +791,18 @@ function CVPreviewPageContent() {
           </div>
         </div>
       </header>
+
+      {draftReadyMessage && (
+        <div className="mx-6 mb-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start gap-3">
+          <CheckCircle className="w-5 h-5 text-emerald-400 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-emerald-300">{draftReadyMessage}</p>
+            <p className="text-xs text-emerald-200/80 mt-1">
+              Review and edit the draft, then validate before queueing.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Validation Issues */}
       {validationIssues.length > 0 && (
@@ -852,7 +884,6 @@ function CVPreviewPageContent() {
             </div>
           )}
 
-          {/* Cover Letter Display */}
           {coverLetter && showCoverLetter && cvDraft && (
             <CoverLetterSection
               coverLetter={coverLetter}

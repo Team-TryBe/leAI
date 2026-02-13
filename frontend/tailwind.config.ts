@@ -10,18 +10,55 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          primary: '#3010b2',
-          'primary-hover': '#2408a0',
-          'primary-light': '#4620d4',
-          dark: '#0f0f23',
-          'dark-card': '#1a1a3e',
-          'dark-border': '#2d2d5f',
-          text: '#e4e4e7',
-          'text-muted': '#a1a1b4',
-          accent: '#8b5cf6',
-          'accent-hover': '#7c3aed',
+          // Primary brand colors
+          primary: '#2728D2',         // Blue
+          'primary-hover': '#1f20a8',  // Darker blue on hover
+          'primary-light': '#4547e0',  // Lighter blue
+          
+          // Dark theme colors
+          dark: '#000000',             // Black background
+          'dark-card': '#0a0a0a',      // Slightly lighter black for cards
+          'dark-border': '#1a1a1a',    // Subtle border
+          'dark-hover': '#141414',     // Hover state for dark elements
+          
+          // Text colors
+          text: '#FFFFFF',             // White primary text
+          'text-muted': '#a3a3a3',     // Gray muted text
+          'text-light': '#e5e5e5',     // Light gray text
+          
+          // Accent colors
+          accent: '#2728D2',           // Blue accent (same as primary)
+          'accent-hover': '#1f20a8',   // Darker blue accent on hover
+          
+          // Status colors
           success: '#10b981',
           error: '#ef4444',
+          
+          // Secondary palette (grays and blues)
+          secondary: {
+            50: '#f0f0ff',
+            100: '#e0e0ff',
+            300: '#4547e0',
+            400: '#3738d8',
+            500: '#2728D2',
+            600: '#1f20a8',
+            700: '#181984',
+            800: '#111370',
+            900: '#0a0a3d',
+            950: '#050528',
+          },
+          gray: {
+            50: '#fafafa',
+            100: '#f5f5f5',
+            200: '#e5e5e5',
+            300: '#d4d4d4',
+            400: '#a3a3a3',
+            500: '#737373',
+            600: '#525252',
+            700: '#404040',
+            800: '#2D2D2D',
+            900: '#1a1a1a',
+          },
         },
       },
       fontFamily: {

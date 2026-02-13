@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { SignupSchema, SignupInput } from '@/lib/schemas'
@@ -50,11 +51,19 @@ export function SignupForm() {
         setTimeout(() => router.push('/auth/login?verified_email=pending'), 1500)
       }
     } catch (err: any) {
-      setError(
-        err.response?.data?.detail ||
-          err.response?.data?.error?.detail ||
-          'Failed to create account'
-      )
+      const errorMsg = err.response?.data?.detail || err.response?.data?.error?.detail || 'Failed to create account'
+      // Provide more user-friendly error messages
+      if (errorMsg.toLowerCase().includes('already exists') || errorMsg.toLowerCase().includes('already registered')) {
+        setError('This email is already registered. Please sign in or use a different email.')
+      } else if (errorMsg.toLowerCase().includes('invalid email')) {
+        setError('Please enter a valid email address.')
+      } else if (errorMsg.toLowerCase().includes('password')) {
+        setError('Password must be at least 8 characters with letters, numbers, and symbols.')
+      } else if (errorMsg.toLowerCase().includes('network') || errorMsg.toLowerCase().includes('connection')) {
+        setError('Network error. Please check your internet connection and try again.')
+      } else {
+        setError(errorMsg)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -77,7 +86,14 @@ export function SignupForm() {
         setTimeout(() => router.push('/dashboard'), 700)
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Google sign-up failed')
+      const errorMsg = err.response?.data?.detail || 'Google sign-up failed'
+      if (errorMsg.toLowerCase().includes('already exists')) {
+        setError('This Google account is already registered. Please sign in instead.')
+      } else if (errorMsg.toLowerCase().includes('popup') || errorMsg.toLowerCase().includes('closed')) {
+        setError('Google sign-up was cancelled. Please try again.')
+      } else {
+        setError('Unable to sign up with Google. Please try email/password or contact support.')
+      }
     } finally {
       setIsGoogleLoading(false)
     }
@@ -125,110 +141,114 @@ export function SignupForm() {
     }
   }, [])
   return (
-    <div className="min-h-screen bg-gradient-dark bg-gradient-mesh flex items-center justify-center px-4 py-12">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-20 right-10 w-72 h-72 bg-brand-primary/20 rounded-full filter blur-3xl animate-float" />
-        <div className="absolute bottom-20 left-10 w-72 h-72 bg-brand-accent/20 rounded-full filter blur-3xl animate-float" style={{ animationDelay: '1.5s' }} />
-      </div>
-
-      <div className="relative w-full max-w-md">
+    <div className="fixed inset-0 bg-white flex items-center justify-center px-4 py-12 overflow-y-auto">
+      {/* White background covers entire page */}
+      <div className="w-full max-w-md my-auto">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-block mb-4">
-            <div className="text-4xl font-display font-bold bg-gradient-brand bg-clip-text text-transparent">LeAI</div>
+            <Image
+              src="/logos/black_logo_full.png"
+              alt="LeAI Logo"
+              width={120}
+              height={40}
+              priority
+              className="h-auto"
+            />
           </div>
-          <h1 className="text-3xl font-display font-bold text-brand-text mb-2">Start Your Journey</h1>
-          <p className="text-brand-text-muted text-sm">Join <span className="text-brand-primary font-semibold">tryleai</span> and revolutionize your workflow</p>
+          <h1 className="text-3xl font-display font-bold text-black mb-2">Start Your Journey</h1>
+          <p className="text-black text-sm">Join <span className="text-black font-semibold">LeAI</span> and revolutionize your workflow</p>
         </div>
 
         {/* Card */}
-        <div className="card-dark p-8 space-y-6">
-          {error && <Alert type="error">{error}</Alert>}
+        <div className="bg-white p-8 space-y-6 border border-gray-300 rounded-lg">
+          {error && (
+            <Alert type="error" role="alert" aria-live="assertive">
+              {error}
+            </Alert>
+          )}
           {success && (
-            <Alert type="success" className="border-brand-success bg-brand-success/10">
-              🎉 Account created! Check your email to verify, then sign in...
+            <Alert type="success" role="status" aria-live="polite">
+              🎉 Account created successfully! Please check your email to verify your account before signing in.
             </Alert>
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             {/* Full Name */}
             <div>
-              <label className="block text-sm font-semibold text-brand-text mb-2.5">Full Name</label>
+              <label className="block text-sm font-semibold text-black mb-2.5">Full Name</label>
               <Input
                 {...register('full_name')}
                 type="text"
                 placeholder="John Doe"
                 error={errors.full_name?.message}
-                className="input-base"
+                className="input-base text-black"
               />
             </div>
 
             {/* Email */}
             <div>
-              <label className="block text-sm font-semibold text-brand-text mb-2.5">Email Address</label>
+              <label className="block text-sm font-semibold text-black mb-2.5">Email Address</label>
               <Input
                 {...register('email')}
                 type="email"
                 placeholder="you@example.com"
                 error={errors.email?.message}
-                className="input-base"
+                className="input-base text-black"
               />
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-semibold text-brand-text mb-2.5">Password</label>
+              <label className="block text-sm font-semibold text-black mb-2.5">Password</label>
               <Input
                 {...register('password')}
                 type="password"
                 placeholder="At least 8 characters"
                 error={errors.password?.message}
-                className="input-base"
+                className="input-base text-black"
               />
-              <p className="text-xs text-brand-text-muted mt-1.5">✓ Use a mix of letters, numbers & symbols</p>
+              <p className="text-xs text-black mt-1.5">✓ Use a mix of letters, numbers & symbols</p>
             </div>
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-semibold text-brand-text mb-2.5">Confirm Password</label>
+              <label className="block text-sm font-semibold text-black mb-2.5">Confirm Password</label>
               <Input
                 {...register('password_confirm')}
                 type="password"
                 placeholder="Confirm your password"
                 error={errors.password_confirm?.message}
-                className="input-base"
+                className="input-base text-black"
               />
             </div>
 
             {/* Terms */}
-            <div className="flex items-start gap-3 p-3 bg-brand-primary/10 rounded-lg border border-brand-dark-border">
-              <input type="checkbox" id="terms" className="mt-1 w-4 h-4 accent-brand-primary rounded" />
-              <label htmlFor="terms" className="text-xs text-brand-text-muted">
-                I agree to the <a href="#" className="text-brand-primary hover:text-brand-primary-light">Terms of Service</a> and{' '}
-                <a href="#" className="text-brand-primary hover:text-brand-primary-light">Privacy Policy</a>
+            <div className="flex items-start gap-3 p-3 bg-gray-100 rounded-lg border border-gray-300">
+              <input type="checkbox" id="terms" className="mt-1 w-4 h-4 accent-black rounded" />
+              <label htmlFor="terms" className="text-xs text-black">
+                I agree to the <a href="#" className="text-black hover:text-gray-700">Terms of Service</a> and{' '}
+                <a href="#" className="text-black hover:text-gray-700">Privacy Policy</a>
               </label>
             </div>
 
             {/* Create Account Button */}
-            <Button
+            <button
               type="submit"
-              variant="primary"
-              size="lg"
-              isLoading={isLoading}
-              className="w-full py-3 font-semibold text-base"
+              disabled={isLoading}
+              className="w-full py-3 font-semibold text-base bg-black text-white rounded-lg hover:bg-gray-800 disabled:bg-gray-400 transition-colors"
             >
               {isLoading ? 'Creating account...' : 'Create Account'}
-            </Button>
+            </button>
           </form>
 
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-brand-dark-border" />
+              <div className="w-full border-t border-gray-300" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-3 bg-brand-dark-card text-brand-text-muted">or sign up with</span>
+              <span className="px-3 bg-white text-black">or sign up with</span>
             </div>
           </div>
 
@@ -250,9 +270,9 @@ export function SignupForm() {
 
         {/* Footer */}
         <div className="text-center mt-6">
-          <p className="text-sm text-brand-text-muted">
+          <p className="text-sm text-black">
             Already have an account?{' '}
-            <Link href="/auth/login" className="text-brand-primary hover:text-brand-primary-light font-semibold transition-colors">
+            <Link href="/auth/login" className="text-black hover:text-gray-700 font-semibold transition-colors">
               Sign in
             </Link>
           </p>

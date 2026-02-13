@@ -19,7 +19,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthToken } from '@/lib/auth';
 
@@ -37,7 +37,7 @@ interface FormError {
   [key: string]: string;
 }
 
-export default function SettingsPage() {
+function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('profile');
@@ -606,5 +606,20 @@ export default function SettingsPage() {
         {activeTab === 'gmail' && <GmailConnection />}
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <DashboardLayout>
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-primary mx-auto"></div>
+          <p className="text-brand-text-muted mt-4">Loading...</p>
+        </div>
+      </DashboardLayout>
+    }>
+      <SettingsContent />
+    </Suspense>
   );
 }

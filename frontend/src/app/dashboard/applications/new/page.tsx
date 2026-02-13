@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { 
   ArrowLeft, 
@@ -66,7 +66,7 @@ interface CVPersonalizationData {
   company_tone: string;
 }
 
-export default function NewApplicationPage() {
+function NewApplicationContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const jobId = searchParams.get("job_id");
@@ -726,5 +726,20 @@ function SectionCard({
         )}
       </div>
     </div>
+  );
+}
+
+export default function NewApplicationPage() {
+  return (
+    <Suspense fallback={
+      <DashboardLayout>
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-primary mx-auto"></div>
+          <p className="text-brand-text-muted mt-4">Loading...</p>
+        </div>
+      </DashboardLayout>
+    }>
+      <NewApplicationContent />
+    </Suspense>
   );
 }

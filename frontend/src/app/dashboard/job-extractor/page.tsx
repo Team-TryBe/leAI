@@ -420,7 +420,7 @@ export default function JobExtractorPage() {
                     </ul>
                   )}
                   <button
-                    onClick={() => router.push('/dashboard/master-profile')}
+                    onClick={() => router.push('/dashboard/master-cv')}
                     className="mt-3 px-5 py-2.5 rounded-lg bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-sm font-semibold hover:shadow-lg hover:shadow-yellow-500/25 transition-all duration-300"
                   >
                     Go to Master Profile
