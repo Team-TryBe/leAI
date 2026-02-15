@@ -139,7 +139,7 @@ Referral transactions table:
   "success": true,
   "data": {
     "code": "ABC12345",
-    "referral_link": "https://aditus.co.ke/signup?ref=ABC12345",
+    "referral_link": "https://leai.co.ke/signup?ref=ABC12345",
     "referral_credits": 1
   }
 }
@@ -161,7 +161,7 @@ Referral transactions table:
 │  └─ Pre-filled message: "Found this career hack... Code: ABC12345"
 │
 ├─ User B Receives Referral Link
-│  ├─ URL: https://aditus.co.ke/signup?ref=ABC12345
+│  ├─ URL: https://leai.co.ke/signup?ref=ABC12345
 │  ├─ System checks: Is this self-referral? (IP + phone)
 │  └─ ✅ Not self-referral, proceed
 │
@@ -222,9 +222,7 @@ Frontend (.env.local):
 ```
 
 ### Backend URL (for Referral Link Generation)
-Currently set to: `https://aditus.co.ke`
-
-⚠️ **TODO:** Update this to actual production domain when deploying
+Currently set to: `https://leai.co.ke`
 
 ---
 
@@ -323,7 +321,6 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 Before going to production:
 
-- [ ] Update production domain in referral link generation (currently: `https://aditus.co.ke`)
 - [ ] Test with real Google OAuth tokens
 - [ ] Verify database backups
 - [ ] Load test referral endpoints

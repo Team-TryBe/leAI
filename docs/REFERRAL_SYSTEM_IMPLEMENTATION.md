@@ -197,7 +197,7 @@ What it does:
   "success": true,
   "data": {
     "code": "ABC12345",
-    "referral_link": "https://aditus.co.ke/signup?ref=ABC12345",
+    "referral_link": "https://leai.co.ke/signup?ref=ABC12345",
     "referral_credits": 1
   }
 }
@@ -244,5 +244,5 @@ What it does:
 - One-time reward **per user** (can only be earned once in lifetime)
 - Reward triggered on **email verification** (prevents spam signups)
 - All sensitive operations use **atomic transactions** for data integrity
-- Frontend URL format: `https://aditus.co.ke/signup?ref=CODE` (update domain as needed)
+- Frontend URL format: `https://leai.co.ke/signup?ref=CODE`
 

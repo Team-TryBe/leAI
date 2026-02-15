@@ -84,7 +84,7 @@ async def get_referral_link(
     stats = await ReferralService.get_referral_stats(db, current_user.id)
     
     # In production, replace with actual domain
-    base_url = "https://aditus.co.ke"
+    base_url = "https://leai.co.ke"
     referral_link = f"{base_url}/signup?ref={stats['code']}"
     
     return ApiResponse(

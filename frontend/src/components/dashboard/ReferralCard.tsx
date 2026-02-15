@@ -67,8 +67,8 @@ export function ReferralCard() {
     return null
   }
 
-  const referralLink = `https://aditus.co.ke/signup?ref=${stats.code}`
-  const shareMessage = `Join me on Aditus and get a free application credit! Use my referral code: ${stats.code}`
+  const referralLink = `https://leai.co.ke/signup?ref=${stats.code}`
+  const shareMessage = `Join me on LeAI and get a free application credit! Use my referral code: ${stats.code}`
   const shareUrl = referralLink
 
   const handleCopyLink = async () => {

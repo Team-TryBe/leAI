@@ -448,7 +448,7 @@ DARAJA_BASE_URL=https://api.safaricom.co.ke
 ### 2. Update Callback URL
 Use your production domain:
 ```env
-DARAJA_CALLBACK_URL=https://aditus.co.ke/api/v1/payments/callback
+DARAJA_CALLBACK_URL=https://leai.co.ke/api/v1/payments/callback
 ```
 
 ### 3. Get Production Credentials
