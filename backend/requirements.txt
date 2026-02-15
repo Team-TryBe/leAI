@@ -28,7 +28,7 @@ pydantic==2.5.0
 Pillow==10.1.0
 
 # Background Tasks
-python-rq==1.14.1
+rq==1.14.1
 redis==5.0.1
 
 # Authentication & Security
@@ -52,7 +52,7 @@ python-dateutil==2.8.2
 pytz==2023.3
 
 # Logging & Monitoring
-python-logging-loki==0.3.2
+python-logging-loki==0.3.1
 structlog==23.2.0
 
 # Testing

@@ -25,6 +25,7 @@ from app.schemas import (
 )
 from app.services.encryption_service import encrypt_token
 from app.services.resend_service import send_email
+from app.services.referral_service import ReferralService
 from app.api.users import get_current_user
 
 
@@ -93,13 +94,19 @@ class SignupResponse(BaseModel):
     response_model=ApiResponse[SignupResponse],
     status_code=status.HTTP_201_CREATED,
 )
-async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
+async def signup(
+    req: SignupRequest,
+    db: AsyncSession = Depends(get_db),
+    ref_code: str | None = Query(None),  # Optional referral code
+    http_request: Request = None,
+):
     """
     Register a new user.
 
     - **email**: User's email address (must be unique)
     - **full_name**: User's full name
     - **password**: User's password (will be hashed)
+    - **ref_code** (optional): Referral code from existing user
     """
     # Check if user exists
     stmt = select(User).where(User.email == req.email)
@@ -112,6 +119,41 @@ async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
             detail="Email already registered",
         )
 
+    # Get signup IP for fraud detection
+    signup_ip = None
+    if http_request and http_request.client:
+        signup_ip = http_request.client.host
+    
+    # Validate and process referral code
+    referrer_id = None
+    if ref_code:
+        referrer_data = await ReferralService.validate_referral_code(db, ref_code)
+        
+        if referrer_data:
+            # Check for self-referral
+            is_self_referral = await ReferralService.check_self_referral(
+                db,
+                referrer_data["id"],
+                signup_ip or "",
+                req.phone
+            )
+            
+            if is_self_referral:
+                # Silently reject self-referral (don't link to this referrer)
+                referrer_id = None
+            else:
+                referrer_id = referrer_data["id"]
+    
+    # Generate unique referral code for new user
+    unique_code = False
+    while not unique_code:
+        referral_code = ReferralService.generate_referral_code()
+        # Check if code already exists
+        code_check = select(User).where(User.referral_code == referral_code)
+        code_result = await db.execute(code_check)
+        if not code_result.scalar_one_or_none():
+            unique_code = True
+
     # Create new user
     user = User(
         email=req.email,
@@ -120,11 +162,25 @@ async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
         phone=req.phone,
         location=req.location,
         email_verified=True,  # Set to True by default in dev (email service may not be configured)
+        referral_code=referral_code,  # Assign unique referral code
+        referred_by=referrer_id,  # Link to referrer if valid
+        signup_ip=signup_ip,  # Store IP for fraud detection
     )
 
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    # Create referral transaction if user was referred
+    if referrer_id:
+        await ReferralService.create_referral_transaction(
+            db,
+            referrer_id=referrer_id,
+            referred_user_id=user.id,
+            referral_code=ref_code,
+            signup_ip=signup_ip or ""
+        )
+        await db.commit()
 
     # Create email verification token
     verification_token = secrets.token_urlsafe(32)
@@ -230,7 +286,11 @@ async def logout():
 
 @router.get("/verify-email", response_model=ApiResponse)
 async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
-    """Verify email address using a token."""
+    """
+    Verify email address using a token.
+    
+    Also processes referral rewards if the user was referred by another user.
+    """
     token_hash = hash_token(token)
     stmt = select(User).where(User.email_verification_token_hash == token_hash)
     result = await db.execute(stmt)
@@ -247,6 +307,11 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     user.email_verification_sent_at = None
     db.add(user)
     await db.commit()
+    
+    # 🎁 Process referral reward when email is verified
+    # This is the security gate - reward only granted after verification
+    if user.referred_by:
+        await ReferralService.process_referral_reward(db, user.id)
 
     return ApiResponse(success=True, data={"message": "Email verified"})
 

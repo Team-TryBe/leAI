@@ -159,6 +159,14 @@ class User(Base):
     password_reset_expires_at = Column(DateTime, nullable=True)
     google_sub = Column(String(255), nullable=True, unique=True)
     
+    # Referral System (Give 1, Get 1)
+    referral_code = Column(String(8), unique=True, nullable=False, index=True)  # Unique code for sharing
+    referred_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # User who referred this user
+    referral_credits = Column(Integer, default=0, nullable=False)  # Free application credits earned via referrals
+    has_earned_referral_reward = Column(Boolean, default=False, nullable=False)  # Can only earn once in lifetime
+    referral_reward_earned_at = Column(DateTime, nullable=True)  # When the reward was earned
+    signup_ip = Column(String(45), nullable=True)  # IP at signup time (for fraud detection)
+    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -166,6 +174,7 @@ class User(Base):
     master_profile = relationship("MasterProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     job_applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
     admin_actions = relationship("AdminActionLog", back_populates="admin_user", cascade="all, delete-orphan")
+    referred_users = relationship("User", foreign_keys=[referred_by], remote_side=[id], backref="referrer")
 
 
 class MasterProfile(Base):
@@ -533,3 +542,27 @@ class Transaction(Base):
 
     # Relationships
     user = relationship("User", backref="transactions")
+
+class ReferralTransaction(Base):
+    """Referral tracking table for "Give 1, Get 1" system."""
+    __tablename__ = "referral_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    referrer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)  # User who shared code
+    referred_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)  # New user
+    
+    # Status tracking
+    status = Column(String(50), default="PENDING", nullable=False, index=True)  # PENDING, COMPLETED
+    
+    # Metadata
+    referral_code = Column(String(8), nullable=False, index=True)  # Code used
+    signup_ip = Column(String(45), nullable=True)  # IP address of referred user signup
+    verified_at = Column(DateTime, nullable=True)  # When referred user verified email
+    reward_granted_at = Column(DateTime, nullable=True)  # When referrer got the credit
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    referrer = relationship("User", foreign_keys=[referrer_id], backref="referrals_given")
+    referred_user = relationship("User", foreign_keys=[referred_user_id], backref="referrals_received")

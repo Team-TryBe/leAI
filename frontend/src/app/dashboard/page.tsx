@@ -20,6 +20,7 @@ import {
   Eye,
 } from 'lucide-react'
 import Link from 'next/link'
+import { ReferralCard } from '@/components/dashboard/ReferralCard'
 
 interface DashboardStats {
   user: {
@@ -309,6 +310,17 @@ export default function DashboardPage() {
               </Link>
             </div>
           </div>
+        </div>
+
+        {/* Referral System */}
+        <div>
+          <div className="mb-3">
+            <h2 className="text-base font-semibold text-brand-text flex items-center gap-2">
+              🎁 Refer Friends & Earn Credits
+            </h2>
+            <p className="text-sm text-brand-text-muted mt-1">Invite friends and get free application credits</p>
+          </div>
+          <ReferralCard />
         </div>
 
         {/* Recent Applications */}

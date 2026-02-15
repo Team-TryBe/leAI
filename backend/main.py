@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings, validate_settings
 from app.db.database import get_db, init_db, close_db
 from app.db.models import Base
-from app.api import auth, users, admin, master_profile, job_extractor, cv_personalizer, cv_drafter, cover_letter, applications, subscriptions, payments, super_admin
+from app.api import auth, users, admin, master_profile, job_extractor, cv_personalizer, cv_drafter, cover_letter, applications, subscriptions, payments, super_admin, referral
 
 
 # Configure logging
@@ -155,6 +155,7 @@ def create_app() -> FastAPI:
     app.include_router(subscriptions.router, prefix="/api/v1")
     app.include_router(payments.router, prefix="/api/v1")
     app.include_router(super_admin.router, prefix="/api/v1")
+    app.include_router(referral.router, prefix="/api/v1")  # Referral system endpoints
     
     # Master Profile Routes (TODO)
     # - GET /api/v1/master-profile
