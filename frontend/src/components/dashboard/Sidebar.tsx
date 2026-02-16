@@ -3,15 +3,17 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { LogOut, Settings, CreditCard, Home, Menu, X, FileText, Sparkles, Send } from 'lucide-react'
+import { LogOut, Settings, CreditCard, Home, Menu, X, FileText, Sparkles, Send, Sun, Moon } from 'lucide-react'
 import { useState } from 'react'
 import { removeAuthToken } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
+import { useTheme } from '@/context/ThemeContext'
 
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
+  const { theme, toggleTheme } = useTheme()
 
   const handleLogout = () => {
     removeAuthToken()
@@ -58,7 +60,7 @@ export function Sidebar() {
           {/* Logo */}
           <Link href="/dashboard" className="flex items-center">
             <Image
-              src="/logos/white_full_logo.png"
+              src={theme === 'dark' ? '/logos/white_full_logo.png' : '/logos/black_logo_full.png'}
               alt="LeAI Logo"
               width={120}
               height={40}
@@ -111,6 +113,27 @@ export function Sidebar() {
               ))}
             </div>
           </nav>
+
+          {/* Theme Toggle */}
+          <div className="space-y-2">
+            <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">
+              Appearance
+            </p>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-medium border border-brand-dark-border bg-brand-dark-card text-brand-text hover:border-brand-primary/40 transition"
+              aria-label="Toggle theme"
+            >
+              <span className="flex items-center gap-2">
+                {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} />}
+                {theme === 'dark' ? 'Dark mode' : 'Light mode'}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-brand-text-muted">
+                Switch
+              </span>
+            </button>
+          </div>
 
           {/* User Info & Logout */}
           <div className="space-y-3 border-t border-brand-dark-border pt-3">

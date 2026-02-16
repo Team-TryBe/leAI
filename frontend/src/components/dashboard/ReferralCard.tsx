@@ -104,7 +104,7 @@ export function ReferralCard() {
   return (
     <div className="space-y-4">
       {/* Reward Status */}
-      <div className="bg-gradient-to-br from-[#2728D2]/5 to-indigo-50 border-l-4 border-[#2728D2] rounded-lg p-6">
+      <div className="referral-reward-card border-l-4 border-[#2728D2] rounded-lg p-6">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-black">Get 1 Free Application Credit</h3>
@@ -117,7 +117,7 @@ export function ReferralCard() {
           {/* Progress Bar */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-700">Referral Progress</span>
+              <span className="referral-progress-label">Referral Progress</span>
               <span className="font-medium text-black">
                 {stats.successful_referrals}/1
               </span>
@@ -146,15 +146,15 @@ export function ReferralCard() {
       </div>
 
       {/* Referral Code Section */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+      <div className="referral-code-card rounded-lg p-6 space-y-4">
         <div>
-          <label className="text-xs font-semibold text-gray-600 uppercase">Your Referral Code</label>
+          <label className="referral-code-label text-xs font-semibold uppercase">Your Referral Code</label>
           <div className="flex gap-2 mt-2">
             <input
               type="text"
               value={stats.code}
               readOnly
-              className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg font-mono text-lg font-bold text-[#2728D2] focus:outline-none focus:ring-2 focus:ring-[#2728D2]/30"
+              className="referral-code-input flex-1 px-4 py-3 rounded-lg font-mono text-lg font-bold text-[#2728D2] focus:outline-none focus:ring-2 focus:ring-[#2728D2]/30"
             />
             <button
               onClick={handleCopyLink}
@@ -168,13 +168,13 @@ export function ReferralCard() {
 
         {/* Share Link Input */}
         <div>
-          <label className="text-xs font-semibold text-gray-600 uppercase">Referral Link</label>
+          <label className="referral-code-label text-xs font-semibold uppercase">Referral Link</label>
           <div className="flex gap-2 mt-2">
             <input
               type="text"
               value={referralLink}
               readOnly
-              className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2728D2]/30 truncate"
+              className="referral-code-input flex-1 px-4 py-3 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2728D2]/30 truncate"
             />
             <button
               onClick={handleCopyLink}
@@ -236,18 +236,18 @@ export function ReferralCard() {
       </div>
 
       {/* Referral Stats */}
-      <div className="grid grid-cols-3 gap-3 bg-gray-50 rounded-lg p-4 border border-gray-200">
+      <div className="referral-stats-card grid grid-cols-3 gap-3 rounded-lg p-4">
         <div className="text-center">
-          <p className="text-2xl font-bold text-[#2728D2]">{stats.total_referrals}</p>
-          <p className="text-xs text-gray-600 mt-1">Total Referrals</p>
+          <p className="referral-stats-value text-2xl font-bold text-[#2728D2]">{stats.total_referrals}</p>
+          <p className="referral-stats-label text-xs text-gray-600 mt-1">Total Referrals</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-green-600">{stats.successful_referrals}</p>
-          <p className="text-xs text-gray-600 mt-1">Verified</p>
+          <p className="referral-stats-value text-2xl font-bold text-green-600">{stats.successful_referrals}</p>
+          <p className="referral-stats-label text-xs text-gray-600 mt-1">Verified</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-yellow-600">{stats.pending_referrals}</p>
-          <p className="text-xs text-gray-600 mt-1">Pending</p>
+          <p className="referral-stats-value text-2xl font-bold text-yellow-600">{stats.pending_referrals}</p>
+          <p className="referral-stats-label text-xs text-gray-600 mt-1">Pending</p>
         </div>
       </div>
 
