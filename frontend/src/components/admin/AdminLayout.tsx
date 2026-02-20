@@ -15,9 +15,12 @@ import {
   LogOut,
   ChevronRight,
   Key,
-  Zap
+  Zap,
+  Sun,
+  Moon
 } from 'lucide-react'
 import { getAuthToken } from '@/lib/auth'
+import { useTheme } from '@/context/ThemeContext'
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -31,6 +34,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [userData, setUserData] = useState<any>(null)
+  const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
     const verifyAdmin = async () => {
@@ -262,6 +266,27 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               })}
             </div>
           </nav>
+
+          {/* Theme Toggle */}
+          <div className="space-y-2">
+            <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">
+              Appearance
+            </p>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-medium border border-brand-dark-border bg-brand-dark-card text-brand-text hover:border-brand-primary/40 transition"
+              aria-label="Toggle theme"
+            >
+              <span className="flex items-center gap-2">
+                {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} />}
+                {theme === 'dark' ? 'Dark mode' : 'Light mode'}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-brand-text-muted">
+                Switch
+              </span>
+            </button>
+          </div>
 
           {/* Admin Info & Logout */}
           <div className="space-y-3 border-t border-brand-dark-border pt-3">

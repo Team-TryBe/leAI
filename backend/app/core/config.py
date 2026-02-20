@@ -29,8 +29,10 @@ class Settings(BaseSettings):
     
     # Gemini API
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "0.7"))
+    GEMINI_MODEL_FAST: str = os.getenv("GEMINI_MODEL_FAST", "gemini-2.5-flash")
+    GEMINI_MODEL_QUALITY: str = os.getenv("GEMINI_MODEL_QUALITY", "gemini-2.5-pro")
     
     # Firecrawl API (for advanced web scraping)
     FIRECRAWL_API_KEY: str = os.getenv("FIRECRAWL_API_KEY", "")
@@ -87,6 +89,21 @@ class Settings(BaseSettings):
     # Scraping
     REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "30"))
     USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    
+    # Paystack Integration (M-Pesa & Card Payments)
+    PAYSTACK_PUBLIC_KEY: str = os.getenv("PAYSTACK_PUBLIC_KEY", "")
+    PAYSTACK_SECRET_KEY: str = os.getenv("PAYSTACK_SECRET_KEY", "")
+    PAYSTACK_WEBHOOK_SECRET: str = os.getenv("PAYSTACK_WEBHOOK_SECRET", "")
+    PAYSTACK_CALLBACK_SUCCESS: str = os.getenv(
+        "PAYSTACK_CALLBACK_SUCCESS",
+        "http://localhost:3000/subscription/success"
+    )
+    PAYSTACK_CALLBACK_CANCEL: str = os.getenv(
+        "PAYSTACK_CALLBACK_CANCEL",
+        "http://localhost:3000/subscription/cancel"
+    )
+    PAYSTACK_CURRENCY: str = os.getenv("PAYSTACK_CURRENCY", "KES")
+    PAYSTACK_TIMEOUT: int = int(os.getenv("PAYSTACK_TIMEOUT", "30"))
     
     model_config = {
         "env_file": ".env",

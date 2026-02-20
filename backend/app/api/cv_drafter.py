@@ -5,26 +5,26 @@ Specialized for the Kenyan job market with local context awareness
 
 import json
 import logging
+import hashlib
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 
-from google import genai
-
 from app.core.config import get_settings
 from app.db.database import get_db
 from app.db.models import MasterProfile, ExtractedJobData, User
 from app.schemas import ApiResponse
 from app.api.users import get_current_user
+from app.services.ai_orchestrator import AIOrchestrator
+from app.services.quota_manager import QuotaManager, QuotaError
+from app.services.cache_manager import CacheManager, CacheType
 
 
 router = APIRouter(prefix="/cv-drafter", tags=["cv-drafter"])
 settings = get_settings()
 logger = logging.getLogger(__name__)
-
-client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 # ============================================================================
@@ -276,34 +276,97 @@ def prepare_master_cv_context(profile: MasterProfile) -> Dict[str, Any]:
 
 
 def extract_json_from_response(text: str) -> dict:
-    """Extract JSON from AI response, handling markdown formatting."""
-    # Try to find JSON block in markdown
+    """
+    Extract JSON from AI response, handling markdown formatting and edge cases.
+    
+    Handles:
+    - JSON wrapped in markdown code blocks (```json...```)
+    - Plain JSON objects
+    - JSON with extra text before/after
+    """
+    import re
+    
+    if not text or not isinstance(text, str):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Invalid response: expected string, got {type(text)}"
+        )
+    
+    original_text = text
+    extracted_via_markdown = False
+    
+    # Strategy 1: Try to extract markdown code block (```json...```)
     if "```json" in text:
         start = text.find("```json") + 7
         end = text.find("```", start)
-        text = text[start:end].strip()
+        if end > start:
+            text = text[start:end].strip()
+            extracted_via_markdown = True
+            logger.debug(f"Extracted JSON from markdown code block (```json)")
     elif "```" in text:
+        # Generic code block without 'json' specifier
         start = text.find("```") + 3
         end = text.find("```", start)
-        text = text[start:end].strip()
+        if end > start:
+            text = text[start:end].strip()
+            extracted_via_markdown = True
+            logger.debug(f"Extracted JSON from markdown code block (generic ```)")
     
     text = text.strip()
     
+    # Strategy 2: Try direct JSON parse
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        # Try to find JSON object in the text
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        if start != -1 and end > start:
-            try:
-                return json.loads(text[start:end])
-            except:
-                pass
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to parse AI response as JSON"
-        )
+        result = json.loads(text)
+        if extracted_via_markdown:
+            logger.info(f"Successfully parsed JSON from markdown code block")
+        else:
+            logger.info(f"Successfully parsed JSON directly")
+        return result
+    except json.JSONDecodeError as e:
+        logger.debug(f"Direct JSON parse failed: {e}")
+    
+    # Strategy 3: Find and extract the JSON object (between first { and last })
+    start = text.find("{")
+    end = text.rfind("}")
+    
+    if start != -1 and end > start:
+        json_text = text[start:end + 1]
+        try:
+            result = json.loads(json_text)
+            logger.info(f"Successfully extracted JSON from position {start}-{end}")
+            return result
+        except json.JSONDecodeError as e:
+            logger.debug(f"Extracted JSON parse failed: {e}")
+    
+    # Strategy 4: Try to find valid JSON by matching braces
+    brace_stack = []
+    for i, char in enumerate(text):
+        if char == "{":
+            if not brace_stack:
+                start = i
+            brace_stack.append(i)
+        elif char == "}":
+            if brace_stack:
+                brace_stack.pop()
+                if not brace_stack:
+                    end = i + 1
+                    try:
+                        result = json.loads(text[start:end])
+                        logger.info(f"Successfully extracted JSON using brace matching: {start}-{end}")
+                        return result
+                    except json.JSONDecodeError:
+                        pass
+    
+    # All strategies failed - log details and raise error
+    logger.error(f"Failed to extract JSON from response")
+    logger.error(f"Response length: {len(original_text)} chars")
+    logger.error(f"Response preview: {original_text[:500]}...")
+    logger.error(f"Response ending: ...{original_text[-200:]}")
+    
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Failed to parse AI response as valid JSON. Response may be incomplete or malformed."
+    )
 
 
 # ============================================================================
@@ -351,6 +414,27 @@ async def draft_cv(
             detail="Master profile not found. Please create your profile first."
         )
     
+    # ============================================================================
+    # Check Quota
+    # ============================================================================
+    
+    try:
+        quota_mgr = QuotaManager(db=db)
+        await quota_mgr.check_quota(
+            user_id=current_user.id,
+            task_type="cv_draft",
+            estimated_tokens=2048
+        )
+    except QuotaError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": "quota_exceeded",
+                "message": str(e),
+                "quota_status": await quota_mgr.get_quota_status(current_user.id)
+            }
+        )
+    
     # Prepare context
     master_cv_context = prepare_master_cv_context(master_profile)
     
@@ -367,15 +451,42 @@ async def draft_cv(
         employment_type=job_data.employment_type or "Full-time"
     )
     
-    # Call Gemini AI
+    # Use orchestrator for CV drafting (with caching)
     try:
-        response = client.models.generate_content(
-            model='models/gemini-2.5-flash',
-            contents=prompt
-        )
+        # Create cache key from job_id and user_id
+        cache_key = hashlib.sha256(f"{current_user.id}_{request.job_id}".encode()).hexdigest()
+        cache_mgr = CacheManager(db=db)
         
-        # Parse the response
-        cv_data = extract_json_from_response(response.text)
+        # Check cache first
+        cached = await cache_mgr.get_cache(cache_key, user_id=current_user.id)
+        
+        if cached:
+            print(f"✅ Cache hit for CV draft: job_id={request.job_id}")
+            cv_data = cached.get("data", {})
+        else:
+            # Not cached, generate
+            orchestrator = AIOrchestrator(db=db)
+            response_text = await orchestrator.generate(
+                user_id=current_user.id,
+                task="cv_draft",
+                prompt=prompt,
+                max_tokens=8192,  # Increased from default 4096 to handle full CV with all sections
+            )
+            
+            # Parse the response
+            logger.debug(f"Raw AI response length: {len(response_text)} characters")
+            cv_data = extract_json_from_response(response_text)
+            logger.info(f"Successfully parsed CV data from AI response")
+            
+            # Cache the CV draft
+            await cache_mgr.set_cache(
+                key=cache_key,
+                content=cv_data,
+                cache_type=CacheType.CONTENT,
+                user_id=current_user.id,
+                ttl_minutes=120  # Cache CVs for 2 hours
+            )
+            print(f"💾 Cached CV draft: job_id={request.job_id}")
         
         # Calculate metadata
         total_text = json.dumps(cv_data)

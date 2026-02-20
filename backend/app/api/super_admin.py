@@ -299,7 +299,8 @@ async def update_user_role(
         db=db,
         user=current_user,
         action="UPDATE_USER_ROLE",
-        target_user_id=target_user.id,
+        target_type="user",
+        target_id=target_user.id,
         details={
             "old_role": old_role.value,
             "new_role": request_data.new_role.value,
@@ -370,7 +371,8 @@ async def ban_user(
         db=db,
         user=current_user,
         action="BAN_USER",
-        target_user_id=target_user.id,
+        target_type="user",
+        target_id=target_user.id,
         details={
             "reason": request_data.reason,
             "permanent": request_data.permanent
@@ -439,7 +441,8 @@ async def delete_user_permanently(
         db=db,
         user=current_user,
         action="DELETE_USER_PERMANENT",
-        target_user_id=target_user.id,
+        target_type="user",
+        target_id=target_user.id,
         details={
             "email": user_email,
             "reason": reason

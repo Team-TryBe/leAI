@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings, validate_settings
 from app.db.database import get_db, init_db, close_db
 from app.db.models import Base
-from app.api import auth, users, admin, master_profile, job_extractor, cv_personalizer, cv_drafter, cover_letter, applications, subscriptions, payments, super_admin, referral
+from app.api import auth, users, admin, master_profile, job_extractor, cv_personalizer, cv_drafter, cover_letter, applications, subscriptions, payments, paystack_payments, super_admin, referral, provider_admin
 
 
 # Configure logging
@@ -45,6 +45,24 @@ async def lifespan(app: FastAPI):
         validate_settings(settings)
         await init_db()
         logger.info("✅ Database initialized successfully")
+        
+        # Initialize cache cleanup background task
+        from app.services.cache_manager import CacheManager
+        from app.db.database import AsyncSessionLocal
+        
+        async def cleanup_expired_caches():
+            """Background task to clean up expired caches hourly."""
+            async with AsyncSessionLocal() as db:
+                cache_mgr = CacheManager(db=db)
+                await cache_mgr.cleanup_expired_caches()
+                logger.info("✅ Expired caches cleaned up")
+        
+        # Schedule cleanup to run every hour
+        import asyncio
+        cleanup_task = asyncio.create_task(_run_cleanup_periodically(cleanup_expired_caches))
+        app.cleanup_task = cleanup_task
+        logger.info("✅ Cache cleanup background task started")
+        
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {str(e)}")
         raise
@@ -57,10 +75,29 @@ async def lifespan(app: FastAPI):
     # SHUTDOWN
     logger.info("🛑 Aditus application shutting down...")
     try:
+        if hasattr(app, 'cleanup_task'):
+            app.cleanup_task.cancel()
+            try:
+                await app.cleanup_task
+            except:
+                pass
         await close_db()
         logger.info("✅ Database connection closed")
     except Exception as e:
         logger.error(f"Error during shutdown: {str(e)}")
+
+
+async def _run_cleanup_periodically(cleanup_func):
+    """Run cleanup function every hour."""
+    import asyncio
+    while True:
+        try:
+            await asyncio.sleep(3600)  # Run every hour
+            await cleanup_func()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Error in cleanup task: {str(e)}")
 
 
 # ============================================================================
@@ -154,8 +191,10 @@ def create_app() -> FastAPI:
     app.include_router(applications.router, prefix="/api/v1")
     app.include_router(subscriptions.router, prefix="/api/v1")
     app.include_router(payments.router, prefix="/api/v1")
+    app.include_router(paystack_payments.router, prefix="/api/v1")
     app.include_router(super_admin.router, prefix="/api/v1")
     app.include_router(referral.router, prefix="/api/v1")  # Referral system endpoints
+    app.include_router(provider_admin.router, prefix="/api/v1")  # AI Provider management
     
     # Master Profile Routes (TODO)
     # - GET /api/v1/master-profile

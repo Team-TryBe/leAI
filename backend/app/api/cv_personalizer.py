@@ -362,7 +362,7 @@ async def personalize_section(
     
     try:
         response = client.models.generate_content(
-            model='models/gemini-2.5-flash',
+            model='gemini-1.5-flash',
             contents=prompt
         )
         

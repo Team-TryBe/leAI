@@ -272,7 +272,8 @@ async def log_sensitive_action(
     db: AsyncSession,
     user: User,
     action: str,
-    target_user_id: int = None,
+    target_type: str = None,
+    target_id: int = None,
     details: dict = None,
     ip_address: str = None
 ):
@@ -291,10 +292,10 @@ async def log_sensitive_action(
     log_entry = AdminActionLog(
         admin_user_id=user.id,
         action=action,
-        target_user_id=target_user_id,
+        target_type=target_type,
+        target_id=target_id,
         details=details or {},
         ip_address=ip_address,
-        timestamp=datetime.utcnow()
     )
     
     db.add(log_entry)

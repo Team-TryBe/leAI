@@ -6,13 +6,11 @@ Multimodal job posting ingestion: URLs, Images, and Manual Text
 import os
 import json
 import httpx
-from typing import Optional, List
+import hashlib
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
-from google import genai
-from google.genai import types
 
 from app.core.config import get_settings
 from app.db.database import get_db
@@ -20,17 +18,13 @@ from app.db.models import ExtractedJobData, User, MasterProfile, JobApplication
 from app.schemas import ApiResponse, ExtractedJobDataResponse
 from app.api.users import get_current_user
 from app.utils.profile_validator import is_master_profile_complete
+from app.services.ai_orchestrator import AIOrchestrator
+from app.services.quota_manager import QuotaManager, QuotaError
+from app.services.cache_manager import CacheManager, CacheType
 
 
 router = APIRouter(prefix="/job-extractor", tags=["job-extractor"])
 settings = get_settings()
-
-# Configure Gemini API - get from settings instead of direct os.getenv
-GEMINI_API_KEY = settings.GEMINI_API_KEY
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY is not configured. Please set it in your .env file.")
-
-client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 # ============================================================================
@@ -124,6 +118,61 @@ Your response MUST be valid JSON only, with no additional text before or after."
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+def _extract_json_block(text: str) -> str:
+    """Extract JSON from markdown code blocks."""
+    if "```json" in text:
+        start = text.find("```json") + 7
+        end = text.find("```", start)
+        return text[start:end].strip()
+    if "```" in text:
+        start = text.find("```") + 3
+        end = text.find("```", start)
+        return text[start:end].strip()
+    return text.strip()
+
+
+def parse_validation_response(text: str) -> Dict[str, Any]:
+    """Parse validator JSON with safe fallbacks."""
+    raw = _extract_json_block(text)
+    try:
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            raise ValueError("Validation response is not an object")
+        return {
+            "is_relevant": bool(data.get("is_relevant", False)),
+            "reason": str(data.get("reason", "No reason provided"))
+        }
+    except Exception:
+        # Fail open to avoid blocking user flow on validator errors
+        return {
+            "is_relevant": True,
+            "reason": "Validation unavailable; proceeding by default"
+        }
+
+
+async def validate_image_relevance(
+    image_bytes: bytes,
+    mime_type: str,
+    user_id: int,
+    db: AsyncSession
+) -> Dict[str, Any]:
+    """Pre-flight validation to check if image looks like a job posting."""
+    prompt = (
+        "Analyze this image. Is it a job description, a job posting screenshot, or a career page? "
+        "Does it contain details like Job Title, Company, or Salary? "
+        "Return ONLY a JSON object: {\"is_relevant\": boolean, \"reason\": \"short explanation\"}"
+    )
+
+    orchestrator = AIOrchestrator(db=db)
+    response = await orchestrator.generate(
+        user_id=user_id,
+        task="extraction_validation",
+        prompt=prompt,
+        image_data=image_bytes,
+    )
+    return parse_validation_response(response)
+
 
 async def scrape_url_with_firecrawl(url: str) -> str:
     """
@@ -383,6 +432,7 @@ async def extract_job(
     url: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     raw_text: Optional[str] = Form(None),
+    force: Optional[bool] = Form(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -428,14 +478,29 @@ async def extract_job(
         )
     
     # ============================================================================
-    # STEP 2: Proceed with Job Extraction
+    # STEP 2: Check Quota
     # ============================================================================
     
-    if not GEMINI_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="GEMINI_API_KEY not configured. Please set it in .env file."
+    try:
+        quota_mgr = QuotaManager(db=db)
+        await quota_mgr.check_quota(
+            user_id=current_user.id,
+            task_type="extraction",
+            estimated_tokens=1024
         )
+    except QuotaError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": "quota_exceeded",
+                "message": str(e),
+                "quota_status": await quota_mgr.get_quota_status(current_user.id)
+            }
+        )
+    
+    # ============================================================================
+    # STEP 3: Proceed with Job Extraction
+    # ============================================================================
     
     if not any([url, image, raw_text]):
         raise HTTPException(
@@ -447,30 +512,65 @@ async def extract_job(
         content_to_analyze = None
         source_type = None
         original_url = url
+        extracted_data = None
         
-        # Channel A: URL Ingestion
+        # Initialize cache manager
+        cache_mgr = CacheManager(db=db)
+        
+        # Channel A: URL Ingestion (with caching)
         if url:
             print(f"🌐 Extracting from URL: {url}")
-            markdown_content = await scrape_url_with_firecrawl(url)
-            content_to_analyze = f"{EXTRACTION_PROMPT}\n\nJob Posting Content:\n{markdown_content}"
-            source_type = "url"
+            
+            # Check cache first
+            cache_key = hashlib.sha256(url.encode()).hexdigest()
+            cached = await cache_mgr.get_cache(cache_key, user_id=current_user.id)
+            
+            if cached:
+                print(f"✅ Cache hit for URL: {url[:50]}...")
+                extracted_data = cached.get("data", {})
+                source_type = "url_cached"
+            else:
+                # Not cached, fetch and extract
+                markdown_content = await scrape_url_with_firecrawl(url)
+                content_to_analyze = f"{EXTRACTION_PROMPT}\n\nJob Posting Content:\n{markdown_content}"
+                source_type = "url"
         
         # Channel B: Image/Screenshot Ingestion (Multimodal)
         elif image:
             print(f"📸 Extracting from image: {image.filename}")
             image_bytes = await image.read()
+
+            # Validate image relevance unless force=true
+            if not force:
+                validation = await validate_image_relevance(
+                    image_bytes,
+                    image.content_type or "image/jpeg",
+                    current_user.id,
+                    db
+                )
+                if not validation.get("is_relevant", False):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail={
+                            "error": "image_not_relevant",
+                            "message": "This image doesn't look like a job description.",
+                            "reason": validation.get("reason", "No reason provided"),
+                            "allow_proceed": True
+                        }
+                    )
             
-            # Gemini multimodal prompt with new API
-            response = client.models.generate_content(
-                model='models/gemini-2.5-flash',
-                contents=[
-                    EXTRACTION_PROMPT,
-                    types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg")
-                ]
+            # Use orchestrator for multimodal extraction
+            orchestrator = AIOrchestrator(db=db)
+            response_text = await orchestrator.generate(
+                user_id=current_user.id,
+                task="extraction",
+                prompt=EXTRACTION_PROMPT,
+                image_data=image_bytes,
+                max_tokens=4096,  # Adequate for job extraction with structured data
             )
             
-            print(f"🤖 AI Response (first 300 chars): {response.text[:300]}")
-            extracted_data = extract_json_from_response(response.text)
+            print(f"🤖 AI Response (first 300 chars): {response_text[:300]}")
+            extracted_data = extract_json_from_response(response_text)
             source_type = "image"
             original_url = f"uploaded:{image.filename}"
         
@@ -482,13 +582,28 @@ async def extract_job(
             original_url = "manual_input"
         
         # Generate extraction for URL and Text modes
-        if content_to_analyze:
-            response = client.models.generate_content(
-                model='models/gemini-2.5-flash',
-                contents=content_to_analyze
+        if content_to_analyze and not extracted_data:
+            orchestrator = AIOrchestrator(db=db)
+            response_text = await orchestrator.generate(
+                user_id=current_user.id,
+                task="extraction",
+                prompt=content_to_analyze,
+                max_tokens=4096,  # Adequate for job extraction with structured data
             )
-            print(f"🤖 AI Response (first 300 chars): {response.text[:300]}")
-            extracted_data = extract_json_from_response(response.text)
+            print(f"🤖 AI Response (first 300 chars): {response_text[:300]}")
+            extracted_data = extract_json_from_response(response_text)
+            
+            # Cache the extraction if it's from URL
+            if source_type == "url" and url:
+                cache_key = hashlib.sha256(url.encode()).hexdigest()
+                await cache_mgr.set_cache(
+                    key=cache_key,
+                    content=extracted_data,
+                    cache_type=CacheType.EXTRACTION,
+                    user_id=current_user.id,
+                    ttl_minutes=45  # Cache extractions for 45 minutes
+                )
+                print(f"💾 Cached extraction for URL: {url[:50]}...")
         
         # Log the extracted data for debugging
         print(f"📊 Extracted data: {json.dumps(extracted_data, indent=2)}")
@@ -498,7 +613,7 @@ async def extract_job(
             print(f"⚠️ Missing required fields. AI Response: {response.text[:500]}")
             
             # Check if AI detected a login page
-            if "login" in response.text.lower() or "sign in" in response.text.lower():
+            if "login" in response_text.lower() or "sign in" in response_text.lower():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Could not extract job data - the URL appears to be a login or authentication page. For LinkedIn jobs, please take a screenshot or copy-paste the job description manually."
@@ -557,6 +672,35 @@ async def extract_job(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Extraction failed: {str(e)}"
         )
+
+
+# ============================================================================
+# IMAGE VALIDATION ENDPOINT
+# ============================================================================
+
+@router.post("/validate-image", response_model=ApiResponse[Dict[str, Any]])
+async def validate_image(
+    image: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Validate if an uploaded image looks like a job description.
+    Returns relevance flag and reason for UI feedback.
+    """
+    if not image:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image file is required"
+        )
+
+    image_bytes = await image.read()
+    validation = await validate_image_relevance(image_bytes, image.content_type or "image/jpeg")
+
+    return ApiResponse(
+        success=True,
+        message="Image validation completed",
+        data=validation
+    )
 
 
 

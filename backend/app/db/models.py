@@ -566,3 +566,244 @@ class ReferralTransaction(Base):
     # Relationships
     referrer = relationship("User", foreign_keys=[referrer_id], backref="referrals_given")
     referred_user = relationship("User", foreign_keys=[referred_user_id], backref="referrals_received")
+
+
+# ============================================================================
+# AI PROVIDER CONFIGURATION
+# ============================================================================
+
+class AIProviderType(str, Enum):
+    """Supported AI providers."""
+    GEMINI = "gemini"
+    OPENAI = "openai"
+    CLAUDE = "claude"
+
+
+class AIProviderConfig(Base):
+    """AI provider configuration and credentials (encrypted)."""
+    __tablename__ = "ai_provider_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    provider_type = Column(SQLEnum(AIProviderType), nullable=False, index=True)
+    
+    # Provider-specific details
+    api_key_encrypted = Column(Text, nullable=False)  # Encrypted with Fernet
+    model_name = Column(String(255), nullable=False)  # e.g., "gpt-4o-mini", "claude-3-5-sonnet-20241022"
+    
+    # Configuration
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    is_default = Column(Boolean, default=False, nullable=False)  # Only one default per type
+    
+    # Task-specific routing
+    default_for_extraction = Column(Boolean, default=False, nullable=False)
+    default_for_cv_draft = Column(Boolean, default=False, nullable=False)
+    default_for_cover_letter = Column(Boolean, default=False, nullable=False)
+    default_for_validation = Column(Boolean, default=False, nullable=False)
+    
+    # Metadata
+    display_name = Column(String(255), nullable=True)  # e.g., "GPT-4 Standard"
+    description = Column(Text, nullable=True)
+    
+    # Usage limits (optional)
+    daily_token_limit = Column(Integer, nullable=True)  # None = unlimited
+    monthly_token_limit = Column(Integer, nullable=True)
+    
+    # Status
+    last_tested_at = Column(DateTime, nullable=True)
+    last_test_success = Column(Boolean, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Relationships
+    created_by = relationship("User", foreign_keys=[created_by_id], backref="provider_configs_created")
+
+
+class AIProviderUsageLog(Base):
+    """Log AI provider API calls for monitoring and cost tracking."""
+    __tablename__ = "ai_provider_usage_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    provider_config_id = Column(Integer, ForeignKey("ai_provider_configs.id"), nullable=False, index=True)
+    
+    # Task information
+    task_type = Column(String(50), nullable=False)  # extraction, cv_draft, cover_letter, validation
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    
+    # Cost tracking
+    estimated_cost_usd = Column(Integer, nullable=True, default=0)  # In cents
+    
+    # Status
+    status = Column(String(20), default="success")  # success, error, timeout
+    error_message = Column(Text, nullable=True)
+    
+    # Timing
+    latency_ms = Column(Integer, nullable=True)  # Response time in milliseconds
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Relationships
+    user = relationship("User", backref="provider_usage_logs")
+    provider_config = relationship("AIProviderConfig", backref="usage_logs")
+
+
+class AICache(Base):
+    """
+    Intelligent cache storage for AI operations.
+    
+    Supports three-tier caching:
+    1. System Cache: Permanent, shared (CV rules, formatting templates)
+    2. Session Cache: 30-120 min TTL, per-user (job descriptions, profiles)
+    3. Content Cache: Task-specific TTL, per-user (generated CVs, cover letters)
+    
+    Plan-based TTL:
+    - Free: No caching
+    - Pro Monthly: 30-60 min TTL
+    - Pro Annual: 60-120 min TTL
+    - Enterprise: 120-240 min TTL
+    """
+    __tablename__ = "ai_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cache_key = Column(String(255), nullable=False, index=True)
+    cache_type = Column(String(50), nullable=False)  # system, session, content, extraction
+    cache_data = Column(Text, nullable=False)  # JSON-serialized data
+    
+    # Optional user association (None for system caches)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    
+    # Expiration (None = never expires, for system caches)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    
+    # Metadata for tracking and analysis (renamed to avoid SQLAlchemy conflict)
+    cache_metadata = Column(JSON, default={}, nullable=True)
+    
+    # Access tracking for metrics
+    access_count = Column(Integer, default=0, nullable=False)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    last_accessed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    user = relationship("User", backref="cache_entries")
+
+
+# ============================================================================
+# PAYSTACK PAYMENT & BILLING MODELS
+# ============================================================================
+
+class PaystackPayment(Base):
+    """
+    Paystack payment records for subscription purchases.
+    
+    Tracks all payment attempts via Paystack (M-Pesa, Card, etc).
+    Each payment is linked to a plan and user.
+    """
+    __tablename__ = "paystack_payments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # User Reference
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    
+    # Payment Details
+    reference = Column(String(255), nullable=False, unique=True, index=True)  # Paystack reference
+    access_code = Column(String(255), nullable=True)  # Access code from Paystack
+    authorization_url = Column(Text, nullable=True)  # Checkout URL
+    
+    # Amount Information
+    amount = Column(Integer, nullable=False)  # In KES cents (e.g., 9900 = 99.00)
+    currency = Column(String(3), default="KES", nullable=False)
+    
+    # Payment Method
+    payment_method = Column(String(50), nullable=True)  # mpesa, card, bank_transfer
+    payer_phone = Column(String(20), nullable=True)  # M-Pesa phone (07xxxxxxxx)
+    
+    # Status Tracking
+    status = Column(String(50), nullable=False, default="pending", index=True)
+    failure_reason = Column(Text, nullable=True)
+    
+    # Linked Records
+    plan_id = Column(Integer, ForeignKey("plans.id"), nullable=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=True)
+    
+    # Metadata (renamed to avoid SQLAlchemy conflict)
+    payment_metadata = Column(JSON, default={}, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    initiated_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True, index=True)  # Payment expires after 24h
+    
+    # Relationships
+    user = relationship("User", backref="paystack_payments")
+    plan = relationship("Plan", backref="paystack_payment_records")
+
+
+class PaystackTransaction(Base):
+    """
+    Detailed transaction records for each Paystack payment.
+    
+    Stores Paystack's complete response for audit trail and debugging.
+    One payment can have multiple transaction attempts.
+    """
+    __tablename__ = "paystack_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Payment Reference
+    paystack_payment_id = Column(Integer, ForeignKey("paystack_payments.id"), nullable=False, index=True)
+    
+    # Transaction Details
+    transaction_id = Column(String(255), nullable=True)  # Paystack transaction ID
+    receipt_number = Column(String(255), nullable=True)  # M-Pesa receipt/reference
+    
+    # Status
+    status = Column(String(50), nullable=True)
+    message = Column(Text, nullable=True)
+    
+    # Timing
+    timestamp = Column(DateTime, nullable=True)
+    
+    # Raw Response (Full Paystack response for debugging)
+    raw_response = Column(JSON, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Relationships
+    paystack_payment = relationship("PaystackPayment", backref="transactions")
+
+
+class PaystackLog(Base):
+    """
+    Audit log for Paystack payment operations.
+    
+    Tracks all payment events: initialization, verification, webhook receipt, etc.
+    Used for debugging and compliance.
+    """
+    __tablename__ = "paystack_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Payment Reference
+    paystack_payment_id = Column(Integer, ForeignKey("paystack_payments.id"), nullable=True, index=True)
+    
+    # Event Information
+    event_type = Column(String(50), nullable=False, index=True)
+    message = Column(Text, nullable=True)
+    
+    # Technical Details
+    request_data = Column(JSON, nullable=True)
+    response_data = Column(JSON, nullable=True)
+    error_details = Column(JSON, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Relationships
+    paystack_payment = relationship("PaystackPayment", backref="logs")
