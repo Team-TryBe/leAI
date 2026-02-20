@@ -65,12 +65,20 @@ export default function JobExtractorPage() {
   const [deletingJobId, setDeletingJobId] = useState<number | null>(null)
   const jobsPerPage = 5
 
+  // Image validation state
+  const [imageValidationModal, setImageValidationModal] = useState<{
+    show: boolean
+    isRelevant: boolean | null
+    reason?: string
+    pendingFile?: File
+  }>({ show: false, isRelevant: null })
+  const [isValidatingImage, setIsValidatingImage] = useState(false)
+
   // Form inputs
   const [url, setUrl] = useState('')
   const [rawText, setRawText] = useState('')
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
-
   useEffect(() => {
     checkProfileCompleteness()
     fetchSavedJobs()
@@ -222,7 +230,7 @@ export default function JobExtractorPage() {
     }
   }
 
-  const handleExtract = async () => {
+  const handleExtract = async (forceImage = false) => {
     setIsExtracting(true)
     setError(null)
     setExtractedData(null)
@@ -246,14 +254,58 @@ export default function JobExtractorPage() {
         return
       }
 
+      // If it's an image and we haven't validated it yet (and forceImage is false), validate first
+      if (mode === 'image' && imageFiles.length > 0 && !forceImage) {
+        setIsValidatingImage(true)
+        const firstImage = imageFiles[0]
+        
+        const validationFormData = new FormData()
+        validationFormData.append('image', firstImage)
+
+        try {
+          const validateResponse = await fetch('http://127.0.0.1:8000/api/v1/job-extractor/validate-image', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: validationFormData,
+          })
+
+          if (validateResponse.ok) {
+            const validationData = await validateResponse.json()
+            const isRelevant = validationData.data?.is_relevant ?? true
+            const reason = validationData.data?.reason ?? ''
+
+            if (!isRelevant) {
+              setImageValidationModal({
+                show: true,
+                isRelevant: false,
+                reason,
+                pendingFile: firstImage
+              })
+              setIsValidatingImage(false)
+              setIsExtracting(false)
+              return
+            }
+          }
+        } catch (err) {
+          console.error('Image validation failed, proceeding:', err)
+        } finally {
+          setIsValidatingImage(false)
+        }
+      }
+
       const formData = new FormData()
 
       if (mode === 'url' && url) {
         formData.append('url', url)
       } else if (mode === 'image' && imageFiles.length > 0) {
-        imageFiles.forEach((file, index) => {
-          formData.append(`image`, file)
+        imageFiles.forEach((file) => {
+          formData.append('image', file)
         })
+        if (forceImage) {
+          formData.append('force', 'true')
+        }
       } else if (mode === 'text' && rawText) {
         formData.append('raw_text', rawText)
       } else {
@@ -272,6 +324,18 @@ export default function JobExtractorPage() {
 
       if (!response.ok) {
         const errorData = await response.json()
+        
+        // Handle image validation rejection
+        if (response.status === 400 && errorData.detail?.error === 'image_not_relevant') {
+          setImageValidationModal({
+            show: true,
+            isRelevant: false,
+            reason: errorData.detail.reason || 'Image does not look like a job description',
+            pendingFile: imageFiles[0]
+          })
+          setIsExtracting(false)
+          return
+        }
         
           // Check if this is a master profile incomplete error
           if (response.status === 403 && errorData.detail?.error === 'master_profile_incomplete') {
@@ -329,6 +393,11 @@ export default function JobExtractorPage() {
     router.push(`/dashboard/applications/new?job_id=${jobId}&extracted=true`)
   }
 
+  const handleProceedAnyway = () => {
+    setImageValidationModal({ show: false, isRelevant: null })
+    handleExtract(true)
+  }
+
   const resetForm = () => {
     setUrl('')
     setRawText('')
@@ -337,11 +406,64 @@ export default function JobExtractorPage() {
     setExtractedData(null)
     setError(null)
     setSaveSuccess(false)
+    setImageValidationModal({ show: false, isRelevant: null })
   }
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* Image Validation Modal */}
+        {imageValidationModal.show && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-brand-dark-bg border border-brand-dark-border rounded-lg max-w-md w-full shadow-xl">
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                    <AlertCircle className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-brand-text">Image Validation</h3>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-brand-text-muted">
+                    {imageValidationModal.isRelevant === false
+                      ? "This image doesn't appear to be a job description."
+                      : "Validating image..."}
+                  </p>
+                  {imageValidationModal.reason && (
+                    <p className="text-sm text-brand-text-muted italic">
+                      Reason: {imageValidationModal.reason}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-brand-dark-border">
+                  <button
+                    onClick={() => setImageValidationModal({ show: false, isRelevant: null })}
+                    className="flex-1 px-4 py-2 bg-brand-dark-border hover:bg-brand-dark-border/80 text-brand-text rounded-lg font-medium transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleProceedAnyway}
+                    disabled={isExtracting}
+                    className="flex-1 px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-50 text-white rounded-lg font-medium transition flex items-center justify-center gap-2"
+                  >
+                    {isExtracting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      'Proceed Anyway'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-purple-500/10 border border-indigo-500/20 p-6">
           <div className="flex items-start justify-between">
@@ -606,7 +728,7 @@ export default function JobExtractorPage() {
 
             {/* Extract Button */}
             <button
-              onClick={handleExtract}
+              onClick={() => handleExtract()}
               disabled={isExtracting || (mode === 'url' && !url) || (mode === 'image' && imageFiles.length === 0) || (mode === 'text' && !rawText)}
               className="w-full py-3 px-6 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-semibold hover:shadow-lg hover:shadow-indigo-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2"
             >

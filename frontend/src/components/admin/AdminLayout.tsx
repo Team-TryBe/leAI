@@ -14,7 +14,8 @@ import {
   X,
   LogOut,
   ChevronRight,
-  Key
+  Key,
+  Zap
 } from 'lucide-react'
 import { getAuthToken } from '@/lib/auth'
 
@@ -134,6 +135,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   ]
 
     const userNavItems = [
+      {
+        label: 'Model Testing',
+        href: '/admin/model-testing',
+        icon: Zap,
+      },
       {
         label: 'My Account',
         href: '/admin/account',

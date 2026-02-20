@@ -27,8 +27,8 @@ export default function Home() {
 
             {/* Main Heading */}
             <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-bold leading-[1.1] tracking-tight text-black">
-              Land Your Dream Job
-              <span className="block mt-2 text-brand-secondary-700">10x Faster</span>
+              Apply Smarter.
+              <span className="block mt-2 text-brand-secondary-700">Get Hired Faster</span>
             </h1>
 
             {/* Subheading */}
@@ -44,6 +44,41 @@ export default function Home() {
               <Link href="/#how-it-works" className="inline-flex items-center justify-center px-8 py-4 bg-white border-2 border-brand-secondary-100 text-black rounded-lg font-semibold hover:border-brand-secondary-600 transition-all">
                 See How It Works
               </Link>
+            </div>
+
+            {/* Video Demo Section */}
+            <div className="pt-20 max-w-6xl lg:max-w-7xl mx-auto space-y-8">
+              {/* Heading and Description */}
+              <div className="text-center space-y-4">
+                <h2 className="text-3xl md:text-4xl font-display font-bold text-black">
+                  See LeAI in Action
+                </h2>
+                <p className="text-base md:text-lg text-gray-600 max-w-2xl mx-auto">
+                  Watch how LeAI transforms your job search workflow from application to submission in minutes, not hours
+                </p>
+              </div>
+
+              {/* Video Container */}
+              <div className="relative w-full h-[400px] md:h-[500px] lg:h-[600px] bg-gradient-to-br from-brand-secondary-100 to-brand-secondary-50 rounded-2xl md:rounded-3xl shadow-2xl border border-brand-secondary-200 overflow-hidden">
+                {/* Video placeholder - replace with actual video component */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center space-y-4">
+                    <div className="w-20 h-20 mx-auto bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg">
+                      <div className="w-0 h-0 border-t-8 border-t-transparent border-l-[14px] border-l-brand-secondary-700 border-b-8 border-b-transparent ml-1"></div>
+                    </div>
+                    <p className="text-brand-secondary-700 font-semibold">Watch Demo</p>
+                  </div>
+                </div>
+                {/* Uncomment when you have a video URL */}
+                {/* <video 
+                  className="w-full h-full object-cover"
+                  controls
+                  poster="/path-to-thumbnail.jpg"
+                >
+                  <source src="/path-to-video.mp4" type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video> */}
+              </div>
             </div>
 
             {/* Stats */}
