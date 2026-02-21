@@ -4,15 +4,16 @@ Admin panel and management interfaces.
 
 ## 📋 Files in this Category
 
-| File | Purpose |
-|------|---------|
-| ADMIN_IMPLEMENTATION.md | Implementation guide |
-| ADMIN_API_REFERENCE.md | API reference |
-| ADMIN_PAGES_COMPLETE.md | Pages documentation |
-| ADMIN_DESIGN_SYSTEM.md | Design system |
-| ADMIN_UI_COMPLETION_REPORT.md | UI completion report |
-| ADMIN_UI_REDESIGN_SUMMARY.md | UI redesign summary |
-| ADMIN_BEFORE_AFTER_VISUAL.md | Visual comparison |
+| File | Purpose | Read Time |
+|------|---------|-----------|
+| ADMIN_IMPLEMENTATION.md | Implementation guide | 30 min |
+| ADMIN_PAGES_COMPLETE.md | Pages documentation | 20 min |
+| ADMIN_DESIGN_SYSTEM.md | Design system | 15 min |
+| ADMIN_API_REFERENCE.md | API reference | 25 min |
+| ADMIN_REDESIGN_COMPLETION.md | Latest redesign updates | 10 min |
+| ADMIN_UI_COMPLETION_REPORT.md | UI completion report | 15 min |
+| ADMIN_UI_REDESIGN_SUMMARY.md | UI redesign summary | 10 min |
+| ADMIN_BEFORE_AFTER_VISUAL.md | Visual comparison | 10 min |
 
 ## 🚀 Quick Start
 

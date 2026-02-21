@@ -4,31 +4,51 @@ Complete Paystack M-Pesa payment processing documentation for Aditus.
 
 ## 📋 Files in this Category
 
+### Getting Started
 | File | Purpose | Read Time |
 |------|---------|-----------|
-| PAYSTACK_INDEX.md | Navigation hub | 5 min |
-| PAYSTACK_INTEGRATION_GUIDE.md | Complete architecture guide | 45 min |
-| PAYSTACK_QUICK_REFERENCE.md | Quick setup & API examples | 15 min |
-| PAYSTACK_TESTING_CHECKLIST.md | 6-phase testing procedures | 2-3 hours |
-| PAYSTACK_ENV_TEMPLATE.md | Environment configuration | 10 min |
+| PAYSTACK_QUICK_REFERENCE.md | 5-minute quick start guide | 5 min |
+| PAYSTACK_SETUP_COMPLETE.md | Complete setup instructions | 10 min |
+
+### Guides & Documentation
+| File | Purpose | Read Time |
+|------|---------|-----------|
+| PAYSTACK_INDEX.md | Navigation hub for all payment docs | 5 min |
+| PAYSTACK_INTEGRATION_GUIDE.md | Complete architecture & implementation | 45 min |
+| PAYSTACK_LOCAL_TESTING.md | Local testing with Paystack | 20 min |
+| PAYSTACK_ARCHITECTURE.md | System architecture & data flow | 25 min |
 | PAYSTACK_IMPLEMENTATION_COMPLETE.md | Technical specifications | 30 min |
 | PAYSTACK_FINAL_DELIVERY.md | Delivery summary | 5 min |
+
+### Testing & Configuration
+| File | Purpose | Read Time |
+|------|---------|-----------|
+| PAYSTACK_TESTING_CHECKLIST.md | Complete testing procedures | 2-3 hours |
+| NGROK_WEBHOOK_SETUP.md | Webhook testing with ngrok | 30 min |
+| PAYSTACK_ENV_TEMPLATE.md | Environment configuration | 10 min |
+
+### Alternative Integrations
+| File | Purpose | Read Time |
+|------|---------|-----------|
 | MPESA_INTEGRATION.md | M-Pesa specific details | 15 min |
 
 ## 🚀 Quick Start
 
-1. **New to Paystack integration?**
-   - Start: [PAYSTACK_QUICK_REFERENCE.md](PAYSTACK_QUICK_REFERENCE.md)
-   - Then: [PAYSTACK_INDEX.md](PAYSTACK_INDEX.md)
+### For Local Testing (NEW!)
+1. **5-Minute Setup**: [PAYSTACK_QUICK_REFERENCE.md](PAYSTACK_QUICK_REFERENCE.md)
+2. **Detailed Local Setup**: [PAYSTACK_LOCAL_TESTING.md](PAYSTACK_LOCAL_TESTING.md)
+3. **Webhook Testing**: [NGROK_WEBHOOK_SETUP.md](NGROK_WEBHOOK_SETUP.md)
+4. **Full Testing Checklist**: [PAYSTACK_TESTING_CHECKLIST.md](PAYSTACK_TESTING_CHECKLIST.md)
 
-2. **Need complete understanding?**
-   - Read: [PAYSTACK_INTEGRATION_GUIDE.md](PAYSTACK_INTEGRATION_GUIDE.md)
+### For Complete Understanding
+1. **System Overview**: [PAYSTACK_ARCHITECTURE.md](PAYSTACK_ARCHITECTURE.md)
+2. **Full Integration Guide**: [PAYSTACK_INTEGRATION_GUIDE.md](PAYSTACK_INTEGRATION_GUIDE.md)
+3. **Implementation Details**: [PAYSTACK_IMPLEMENTATION_COMPLETE.md](PAYSTACK_IMPLEMENTATION_COMPLETE.md)
 
-3. **Ready to test?**
-   - Follow: [PAYSTACK_TESTING_CHECKLIST.md](PAYSTACK_TESTING_CHECKLIST.md)
-
-4. **Setting up environment?**
-   - Use: [PAYSTACK_ENV_TEMPLATE.md](PAYSTACK_ENV_TEMPLATE.md)
+### For Setup & Configuration
+1. **Get Setup Instructions**: [PAYSTACK_SETUP_COMPLETE.md](PAYSTACK_SETUP_COMPLETE.md)
+2. **Configure Environment**: [PAYSTACK_ENV_TEMPLATE.md](PAYSTACK_ENV_TEMPLATE.md)
+3. **View Configuration Index**: [PAYSTACK_INDEX.md](PAYSTACK_INDEX.md)
 
 ## 🎯 Topics Covered
 

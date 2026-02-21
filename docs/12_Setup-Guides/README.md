@@ -4,11 +4,11 @@ Initial setup and configuration guides.
 
 ## 📋 Files in this Category
 
-| File | Purpose |
-|------|---------|
-| SETUP_SUMMARY.md | Setup summary |
-| QUICK_REFERENCE.md | Quick reference |
-| IMPLEMENTATION_CHECKLIST.md | Implementation checklist |
+| File | Purpose | Read Time |
+|------|---------|-----------|
+| SETUP_SUMMARY.md | Initial setup guide | 20 min |
+| IMPLEMENTATION_CHECKLIST.md | Implementation checklist | 15 min |
+| DEPLOYMENT_CHECKLIST.md | Deployment checklist | 30 min |
 
 ## 🚀 Quick Start
 
