@@ -5,7 +5,7 @@ Handles token refresh and email sending via Gmail API.
 
 import base64
 import httpx
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -108,7 +108,7 @@ class GmailService:
                 expires_in = token_response.get("expires_in", 3600)
                 user.gmail_token_expires_at = datetime.utcnow().replace(
                     microsecond=0
-                ) + __import__('datetime').timedelta(seconds=expires_in)
+                ) + timedelta(seconds=expires_in)
                 await db.commit()
         
         # Create MIME message
