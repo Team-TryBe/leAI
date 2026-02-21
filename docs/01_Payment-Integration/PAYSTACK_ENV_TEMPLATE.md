@@ -9,7 +9,7 @@ Copy this to your `.env` file and fill in the actual values from your Paystack a
 # Get these from Paystack Dashboard → Settings → API Keys & Webhooks
 PAYSTACK_PUBLIC_KEY=paystack_public_key_here
 PAYSTACK_SECRET_KEY=paystack_secret_key_here
-PAYSTACK_WEBHOOK_SECRET=paystack_webhook_secret_here
+PAYSTACK_WEBHOOK_SECRET=paystack_webhook_secret_key_here
 ```
 
 ### Callback URLs
@@ -43,10 +43,10 @@ PAYSTACK_TIMEOUT=30
 # ============================================================================
 
 # TEST MODE (Use these to test the integration)
-PAYSTACK_PUBLIC_KEY=paystack_test_public_key_here
-PAYSTACK_SECRET_KEY=paystack_test_secret_key_here
-PAYSTACK_WEBHOOK_SECRET=paystack_test_webhook_secret_here
 
+PAYSTACK_PUBLIC_KEY=paystack_public_key_here  # Use your Paystack public key
+PAYSTACK_SECRET_KEY=paystack_secret_key_here  # Use your Paystack secret key
+PAYSTACK_WEBHOOK_SECRET=paystack_webhook_secret_key_here
 # PRODUCTION MODE (Use these for live payments)
 # Uncomment these and comment out TEST MODE when going to production
 # PAYSTACK_PUBLIC_KEY=paystack_live_public_key_here
